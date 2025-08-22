@@ -44,21 +44,34 @@ export class SupabaseService {
       throw new Error(`ドキュメントの保存に失敗しました: ${error.message}`)
     }
 
-    return data
+    // 日付フィールドを適切にDateオブジェクトに変換
+    return {
+      ...data,
+      uploaded_at: data.uploaded_at ? new Date(data.uploaded_at) : new Date(),
+      created_at: data.created_at ? new Date(data.created_at) : undefined,
+      updated_at: data.updated_at ? new Date(data.updated_at) : undefined,
+    }
   }
 
   async getDocuments(userId: string = 'anonymous'): Promise<Document[]> {
     const { data, error } = await supabase
       .from('documents')
       .select('*')
-      .eq('user_id', userId)
       .order('uploaded_at', { ascending: false })
 
     if (error) {
       throw new Error(`ドキュメントの取得に失敗しました: ${error.message}`)
     }
 
-    return data || []
+    // 日付フィールドを適切にDateオブジェクトに変換
+    const documents = (data || []).map(doc => ({
+      ...doc,
+      uploaded_at: doc.uploaded_at ? new Date(doc.uploaded_at) : new Date(),
+      created_at: doc.created_at ? new Date(doc.created_at) : undefined,
+      updated_at: doc.updated_at ? new Date(doc.updated_at) : undefined,
+    }))
+
+    return documents
   }
 
   async getDocument(id: string): Promise<Document | null> {
@@ -75,7 +88,17 @@ export class SupabaseService {
       throw new Error(`ドキュメントの取得に失敗しました: ${error.message}`)
     }
 
-    return data
+    // 日付フィールドを適切にDateオブジェクトに変換
+    if (data) {
+      return {
+        ...data,
+        uploaded_at: data.uploaded_at ? new Date(data.uploaded_at) : new Date(),
+        created_at: data.created_at ? new Date(data.created_at) : undefined,
+        updated_at: data.updated_at ? new Date(data.updated_at) : undefined,
+      }
+    }
+
+    return null
   }
 
   async updateDocument(id: string, updates: Partial<Document>): Promise<Document> {
@@ -90,7 +113,13 @@ export class SupabaseService {
       throw new Error(`ドキュメントの更新に失敗しました: ${error.message}`)
     }
 
-    return data
+    // 日付フィールドを適切にDateオブジェクトに変換
+    return {
+      ...data,
+      uploaded_at: data.uploaded_at ? new Date(data.uploaded_at) : new Date(),
+      created_at: data.created_at ? new Date(data.created_at) : undefined,
+      updated_at: data.updated_at ? new Date(data.updated_at) : undefined,
+    }
   }
 
   async deleteDocument(id: string): Promise<void> {

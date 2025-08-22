@@ -54,38 +54,13 @@ export default function Home() {
           size: file.size,
           type: file.type === 'application/pdf' ? 'pdf' : 'txt',
           uploaded_at: new Date(),
-          summary_status: 'processing',
+          summary_status: 'pending',
           url,
           public_url: url,
           file_path: path
         }
 
         const savedDoc = await supabaseService.saveDocument(document)
-        setUploadProgress(60)
-
-        // 3. AI要約を生成
-        const formData = new FormData()
-        formData.append('file', file)
-
-        const response = await fetch('/api/summarize', {
-          method: 'POST',
-          body: formData
-        })
-
-        if (!response.ok) {
-          throw new Error('Summary generation failed')
-        }
-
-        const { summary, originalContent } = await response.json()
-        setUploadProgress(90)
-
-        // 4. 要約結果でドキュメントを更新
-        await supabaseService.updateDocument(savedDoc.id, {
-          summary: JSON.stringify(summary),
-          content: originalContent,
-          summary_status: 'completed'
-        })
-
         setUploadProgress(100)
         await loadDocuments()
 
