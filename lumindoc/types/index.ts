@@ -1,15 +1,19 @@
 export interface Document {
   id: string
   name: string
-  originalName: string
+  original_name: string
   size: number
   type: 'pdf' | 'txt'
-  uploadedAt: Date
+  uploaded_at: Date
   content?: string
   summary?: string
-  summaryStatus: 'pending' | 'processing' | 'completed' | 'error'
+  summary_status: 'pending' | 'processing' | 'completed' | 'error'
   url?: string
-  publicUrl?: string
+  public_url?: string
+  file_path?: string
+  user_id?: string
+  created_at?: Date
+  updated_at?: Date
 }
 
 export interface SummarySection {

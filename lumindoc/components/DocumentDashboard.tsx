@@ -51,12 +51,12 @@ export function DocumentDashboard({
     let filtered = documents.filter(doc => {
       // 検索フィルター
       const matchesSearch = doc.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                           doc.originalName.toLowerCase().includes(searchQuery.toLowerCase())
+                           doc.original_name.toLowerCase().includes(searchQuery.toLowerCase())
       
       // タイプフィルター
       const matchesFilter = filterBy === 'all' || 
                            filterBy === doc.type ||
-                           filterBy === doc.summaryStatus
+                           filterBy === doc.summary_status
       
       return matchesSearch && matchesFilter
     })
@@ -65,9 +65,9 @@ export function DocumentDashboard({
     filtered.sort((a, b) => {
       switch (sortBy) {
         case 'date':
-          return new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
+          return new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime()
         case 'name':
-          return a.originalName.localeCompare(b.originalName)
+          return a.original_name.localeCompare(b.original_name)
         case 'size':
           return b.size - a.size
         case 'type':
@@ -293,7 +293,7 @@ function DocumentCard({
             </div>
             <div className="ml-3 flex-1 min-w-0">
               <h3 className="text-sm font-semibold text-gray-900 truncate">
-                {document.originalName}
+                {document.original_name}
               </h3>
               <p className="text-xs text-gray-500">
                 {formatFileSize(document.size)}
@@ -332,16 +332,16 @@ function DocumentCard({
         <div className="mb-3">
           <span className={cn(
             "inline-flex items-center px-2 py-1 rounded-full text-xs font-medium",
-            getSummaryStatusColor(document.summaryStatus)
+            getSummaryStatusColor(document.summary_status)
           )}>
-            {getSummaryStatusText(document.summaryStatus)}
+            {getSummaryStatusText(document.summary_status)}
           </span>
         </div>
 
         {/* 日付 */}
         <div className="flex items-center text-xs text-gray-500">
           <Calendar className="w-3 h-3 mr-1" />
-          {formatDate(document.uploadedAt)}
+          {formatDate(document.uploaded_at)}
         </div>
       </div>
     </motion.div>
@@ -392,12 +392,12 @@ function DocumentListItem({
       {/* ファイル情報 */}
       <div className="flex-1 min-w-0">
         <h3 className="text-sm font-medium text-gray-900 truncate">
-          {document.originalName}
+          {document.original_name}
         </h3>
         <div className="flex items-center mt-1 text-xs text-gray-500 space-x-4">
           <span>{formatFileSize(document.size)}</span>
           <span>{document.type.toUpperCase()}</span>
-          <span>{formatDate(document.uploadedAt)}</span>
+          <span>{formatDate(document.uploaded_at)}</span>
         </div>
       </div>
 
@@ -405,9 +405,9 @@ function DocumentListItem({
       <div className="mr-4">
         <span className={cn(
           "inline-flex items-center px-2 py-1 rounded-full text-xs font-medium",
-          getSummaryStatusColor(document.summaryStatus)
+          getSummaryStatusColor(document.summary_status)
         )}>
-          {getSummaryStatusText(document.summaryStatus)}
+          {getSummaryStatusText(document.summary_status)}
         </span>
       </div>
 

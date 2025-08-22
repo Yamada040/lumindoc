@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Upload, FileText, Sparkles, ArrowRight, Github, Twitter, Mail } from 'lucide-react'
+import { Upload, FileText, Sparkles, ArrowRight, Github, Twitter, Mail, X } from 'lucide-react'
 import { Document, DetailedSummary } from '@/types'
 import { FileUpload } from '@/components/FileUpload'
 import { DocumentDashboard } from '@/components/DocumentDashboard'
@@ -50,14 +50,14 @@ export default function Home() {
         // 2. ドキュメント情報をデータベースに保存
         const document: Omit<Document, 'id'> = {
           name: file.name,
-          originalName: file.name,
+          original_name: file.name,
           size: file.size,
           type: file.type === 'application/pdf' ? 'pdf' : 'txt',
-          uploadedAt: new Date(),
-          summaryStatus: 'processing',
+          uploaded_at: new Date(),
+          summary_status: 'processing',
           url,
-          publicUrl: url,
-          // filePath: path
+          public_url: url,
+          file_path: path
         }
 
         const savedDoc = await supabaseService.saveDocument(document)
@@ -83,12 +83,12 @@ export default function Home() {
         await supabaseService.updateDocument(savedDoc.id, {
           summary: JSON.stringify(summary),
           content: originalContent,
-          summaryStatus: 'completed'
+          summary_status: 'completed'
         })
 
         setUploadProgress(100)
         await loadDocuments()
-        
+
         // アップロード完了後、ダッシュボードに移動
         setTimeout(() => {
           setCurrentView('dashboard')
@@ -97,7 +97,6 @@ export default function Home() {
 
       } catch (error) {
         console.error('Upload failed:', error)
-        // エラーハンドリング
       } finally {
         setIsLoading(false)
       }
@@ -124,8 +123,8 @@ export default function Home() {
   }
 
   const handleDocumentDownload = async (document: Document) => {
-    if (document.publicUrl) {
-      window.open(document.publicUrl, '_blank')
+    if (document.public_url) {
+      window.open(document.public_url, '_blank')
     }
   }
 
@@ -263,7 +262,7 @@ export default function Home() {
               </div>
               <SummaryCard
                 summary={currentSummary}
-                fileName={selectedDocument.originalName}
+                fileName={selectedDocument.original_name}
               />
             </motion.div>
           )}
@@ -277,8 +276,8 @@ export default function Home() {
               className="fixed inset-0 z-50"
             >
               <PDFViewer
-                fileUrl={selectedDocument.publicUrl!}
-                fileName={selectedDocument.originalName}
+                fileUrl={selectedDocument.public_url!}
+                fileName={selectedDocument.original_name}
                 onClose={() => setCurrentView('dashboard')}
                 isModal={true}
               />
