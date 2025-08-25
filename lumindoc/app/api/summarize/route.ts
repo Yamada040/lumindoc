@@ -33,7 +33,8 @@ export async function POST(request: NextRequest) {
         console.log('Processing PDF file on server side')
         content = await extractPDFContent(file)
       } else if (file.type === 'text/plain') {
-        content = await geminiService.extractTextFromText(file)
+        console.log('Processing text file on server side')
+        content = await extractTextContent(file)
       } else {
         return NextResponse.json({ error: '対応していないファイル形式です' }, { status: 400 })
       }
@@ -78,63 +79,84 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// サーバーサイドでのテキストファイル抽出
+async function extractTextContent(file: File): Promise<string> {
+  try {
+    console.log('Extracting text content from file:', file.name, 'size:', file.size)
+    
+    // ファイルの実際の内容を読み取り
+    const text = await file.text()
+    
+    if (!text || text.trim().length === 0) {
+      return `
+テキストファイル: ${file.name}
+ファイルサイズ: ${(file.size / 1024).toFixed(2)} KB
+アップロード日時: ${new Date().toLocaleString('ja-JP')}
+
+※このファイルは空か、読み取り可能なテキスト内容がありません。
+      `.trim()
+    }
+    
+    // テキスト内容にメタデータを追加
+    const enrichedText = `
+ファイル名: ${file.name}
+ファイルサイズ: ${(file.size / 1024).toFixed(2)} KB
+文字数: ${text.length}
+アップロード日時: ${new Date().toLocaleString('ja-JP')}
+
+===== ファイル内容 =====
+${text}
+    `.trim()
+    
+    console.log('Text extraction successful, content length:', enrichedText.length)
+    return enrichedText
+    
+  } catch (error) {
+    console.error('Text extraction error:', error)
+    return `
+テキストファイル: ${file.name}
+ファイルサイズ: ${(file.size / 1024).toFixed(2)} KB
+アップロード日時: ${new Date().toLocaleString('ja-JP')}
+
+※テキストファイルの読み取り中にエラーが発生しました: ${error instanceof Error ? error.message : 'Unknown error'}
+    `.trim()
+  }
+}
+
 // サーバーサイドでのPDFテキスト抽出（一時的な実装）
 async function extractPDFContent(file: File): Promise<string> {
   try {
-    console.log('Processing PDF file (temporary implementation), file size:', file.size)
+    console.log('Processing PDF file (basic info only), file size:', file.size)
     
-    // 一時的にファイル情報とサンプルテキストを返す
-    // TODO: 後で実際のPDF解析ライブラリを実装
-    
-    const sampleText = `
+    // PDFファイルの基本情報のみを返す（実際のテキスト抽出は今後実装）
+    const basicInfo = `
 PDFファイル: ${file.name}
 ファイルサイズ: ${(file.size / 1024).toFixed(2)} KB
 アップロード日時: ${new Date().toLocaleString('ja-JP')}
 推定ページ数: ${Math.max(1, Math.floor(file.size / 50000))}
 
-【サンプル解析内容 - PDFファイル】
-このドキュメントは重要な情報を含んでいると推測されます。
+※PDFファイルの内容:
+このPDFファイル「${file.name}」について、以下の情報に基づいて要約を生成します：
+- ファイルサイズから推定される内容の豊富さ
+- 一般的な文書構造の想定
+- ファイル名から推測される内容
 
-主要なセクション:
-1. 導入・概要
-   - プロジェクトの背景と目的
-   - 対象範囲の定義
-   
-2. 詳細分析
-   - データの収集と分析手法
-   - 結果の評価と考察
-   
-3. 結論と提案
-   - 主要な発見事項
-   - 今後のアクション項目
-   
-4. 付録資料
-   - 参考文献
-   - 技術仕様
-
-キーワード: プロジェクト、分析、結果、提案、実装、評価
-
-※注意: これは一時的な実装です。実際のPDFテキストを抽出するには、
-専用のライブラリ（pdf-parse、pdf2pic等）の適切な設定が必要です。
-現在はファイル情報とサンプル構造を基にした要約を生成しています。
+※注意: 現在は基本情報のみでの要約です。
+実際のPDFテキスト抽出機能は今後実装予定です。
     `.trim()
     
-    console.log('PDF content prepared (temporary), length:', sampleText.length)
-    return sampleText
+    console.log('PDF basic info prepared, length:', basicInfo.length)
+    return basicInfo
     
   } catch (error) {
     console.error('PDF processing error:', error)
-    // エラーが発生した場合もファイル情報は返す
-    const errorText = `
+    return `
 PDFファイル: ${file.name}
 ファイルサイズ: ${(file.size / 1024).toFixed(2)} KB
 アップロード日時: ${new Date().toLocaleString('ja-JP')}
 
 ※PDFファイルの処理中にエラーが発生しました: ${error instanceof Error ? error.message : 'Unknown error'}
-ファイル基本情報のみを使用して要約を生成します。
     `.trim()
-    
-    return errorText
   }
 }
 
