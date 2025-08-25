@@ -204,7 +204,7 @@ export function DocumentDashboard({
           </p>
         </div>
       ) : viewMode === 'grid' ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           <AnimatePresence>
             {filteredAndSortedDocs.map((doc, index) => (
               <DocumentCard
@@ -271,31 +271,34 @@ function DocumentCard({
       exit={{ opacity: 0, y: -20 }}
       transition={{ delay: index * 0.05, duration: 0.3 }}
       className={cn(
-        "bg-white rounded-xl shadow-sm border-2 border-gray-200 hover:shadow-lg hover:border-blue-300 transition-all cursor-pointer group",
+        "bg-white rounded-xl shadow-sm border-2 border-gray-200 hover:shadow-lg hover:border-blue-300 transition-all cursor-pointer group w-full overflow-hidden",
         isSelected && "border-blue-500 bg-blue-50"
       )}
       onClick={onSelect}
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
     >
-      <div className="p-6">
+      <div className="p-4">
         {/* ヘッダー */}
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center">
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex items-center flex-1 min-w-0 mr-2">
             <div className={cn(
-              "w-12 h-12 rounded-lg flex items-center justify-center",
+              "w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0",
               document.type === 'pdf' ? 'bg-red-100' : 'bg-blue-100'
             )}>
               <FileText className={cn(
-                "w-6 h-6",
+                "w-5 h-5",
                 document.type === 'pdf' ? 'text-red-600' : 'text-blue-600'
               )} />
             </div>
             <div className="ml-3 flex-1 min-w-0">
-              <h3 className="text-sm font-semibold text-gray-900 truncate">
+              <h3 
+                className="text-sm font-semibold text-gray-900 truncate leading-tight" 
+                title={document.original_name}
+              >
                 {document.original_name}
               </h3>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-gray-500 mt-1">
                 {formatFileSize(document.size)}
               </p>
             </div>
@@ -390,8 +393,11 @@ function DocumentListItem({
       </div>
 
       {/* ファイル情報 */}
-      <div className="flex-1 min-w-0">
-        <h3 className="text-sm font-medium text-gray-900 truncate">
+      <div className="flex-1 min-w-0 mr-4">
+        <h3 
+          className="text-sm font-medium text-gray-900 truncate leading-tight" 
+          title={document.original_name}
+        >
           {document.original_name}
         </h3>
         <div className="flex items-center mt-1 text-xs text-gray-500 space-x-4">

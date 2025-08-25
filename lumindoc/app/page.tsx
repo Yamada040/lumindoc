@@ -5,6 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Upload, FileText, Sparkles, ArrowRight, Github, Twitter, Mail, X } from 'lucide-react'
 import { Document, DetailedSummary } from '@/types'
 import { FileUpload } from '@/components/FileUpload'
+import { FilePreview } from '@/components/FilePreview'
+import { BatchFilePreview } from '@/components/BatchFilePreview'
 import { DocumentDashboard } from '@/components/DocumentDashboard'
 import { SummaryCard } from '@/components/SummaryCard'
 import { PDFViewer } from '@/components/PDFViewer'
@@ -19,6 +21,10 @@ export default function Home() {
   const [currentSummary, setCurrentSummary] = useState<DetailedSummary | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
+  const [previewFiles, setPreviewFiles] = useState<File[]>([])
+  const [showPreview, setShowPreview] = useState(false)
+  const [isSummarizing, setIsSummarizing] = useState(false)
+  const [summaryProgress, setSummaryProgress] = useState<{ [key: string]: boolean }>({})
 
   // ドキュメントを読み込み
   useEffect(() => {
@@ -37,45 +43,147 @@ export default function Home() {
     }
   }
 
-  const handleFileUpload = async (files: File[]) => {
-    for (const file of files) {
-      try {
-        setIsLoading(true)
-        setUploadProgress(0)
+  // ファイル選択時のハンドラ（プレビュー表示）
+  const handleFileSelect = (files: File[]) => {
+    if (files.length > 0) {
+      setPreviewFiles(files)
+      setShowPreview(true)
+    }
+  }
 
-        // 1. ファイルをSupabaseにアップロード
-        const { url, path } = await supabaseService.uploadFile(file)
-        setUploadProgress(30)
+  // AI要約を実行
+  const generateSummary = async (file: File, documentId: string) => {
+    try {
+      console.log('Starting summary generation for file:', file.name, 'size:', file.size, 'type:', file.type)
+      setSummaryProgress(prev => ({ ...prev, [file.name]: true }))
+      
+      const formData = new FormData()
+      formData.append('file', file)
+      
+      console.log('Sending request to /api/summarize')
+      const response = await fetch('/api/summarize', {
+        method: 'POST',
+        body: formData
+      })
+      
+      console.log('Response status:', response.status, 'ok:', response.ok)
+      
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('API Error Response:', errorText)
+        throw new Error(`Failed to generate summary: ${response.status} - ${errorText}`)
+      }
+      
+      const result = await response.json()
+      console.log('Summary API result:', result)
+      
+      if (result.error) {
+        throw new Error(`Summary generation error: ${result.error}`)
+      }
+      
+      if (result.summary) {
+        console.log('Updating document summary in database')
+        // 要約をデータベースに保存
+        await supabaseService.updateDocumentSummary(documentId, result.summary)
+        console.log('Document summary updated successfully')
+      } else {
+        console.warn('No summary in result:', result)
+      }
+      
+      setSummaryProgress(prev => ({ ...prev, [file.name]: false }))
+      return result.summary
+    } catch (error) {
+      console.error('Summary generation failed:', error)
+      console.error('Error details:', {
+        name: error instanceof Error ? error.name : 'Unknown',
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      })
+      setSummaryProgress(prev => ({ ...prev, [file.name]: false }))
+      throw error
+    }
+  }
 
-        // 2. ドキュメント情報をデータベースに保存
-        const document: Omit<Document, 'id'> = {
-          name: file.name,
-          original_name: file.name,
-          size: file.size,
-          type: file.type === 'application/pdf' ? 'pdf' : 'txt',
-          uploaded_at: new Date(),
-          summary_status: 'pending',
-          url,
-          public_url: url,
-          file_path: path
+  // 単一ファイルのアップロード
+  const handleConfirmUpload = async (file: File, withSummary: boolean = false) => {
+    try {
+      setIsLoading(true)
+      setUploadProgress(0)
+
+      // 1. ファイルをSupabaseにアップロード
+      const { url, path } = await supabaseService.uploadFile(file)
+      setUploadProgress(30)
+
+      // 2. ドキュメント情報をデータベースに保存
+      const document: Omit<Document, 'id'> = {
+        name: file.name,
+        original_name: file.name,
+        size: file.size,
+        type: file.type === 'application/pdf' ? 'pdf' : 'txt',
+        uploaded_at: new Date(),
+        summary_status: 'pending',
+        url,
+        public_url: url,
+        file_path: path
+      }
+
+      const savedDoc = await supabaseService.saveDocument(document)
+      setUploadProgress(100)
+      
+      // AI要約を実行する場合
+      if (withSummary && savedDoc.id) {
+        setIsSummarizing(true)
+        try {
+          await generateSummary(file, savedDoc.id)
+        } catch (error) {
+          console.error('Summary generation failed:', error)
+        } finally {
+          setIsSummarizing(false)
         }
+      }
+      
+      await loadDocuments()
 
-        const savedDoc = await supabaseService.saveDocument(document)
-        setUploadProgress(100)
-        await loadDocuments()
-
-        // アップロード完了後、ダッシュボードに移動
+      // ファイルリストから削除
+      setPreviewFiles(prev => prev.filter(f => f !== file))
+      
+      // すべてのファイルがアップロードされたらダッシュボードへ
+      if (previewFiles.length <= 1) {
         setTimeout(() => {
+          setShowPreview(false)
+          setPreviewFiles([])
           setCurrentView('dashboard')
           setUploadProgress(0)
         }, 500)
-
-      } catch (error) {
-        console.error('Upload failed:', error)
-      } finally {
-        setIsLoading(false)
       }
+
+    } catch (error) {
+      console.error('Upload failed:', error)
+    } finally {
+      setIsLoading(false)
     }
+  }
+
+  // 複数ファイルの一括アップロード
+  const handleBatchUpload = async (files: File[], withSummary: boolean = false) => {
+    for (const file of files) {
+      await handleConfirmUpload(file, withSummary)
+    }
+  }
+
+  // ファイルをリストから削除
+  const handleRemoveFile = (index: number) => {
+    setPreviewFiles(prev => prev.filter((_, i) => i !== index))
+    if (previewFiles.length <= 1) {
+      setShowPreview(false)
+      setPreviewFiles([])
+    }
+  }
+
+  // プレビューキャンセル
+  const handleCancelPreview = () => {
+    setShowPreview(false)
+    setPreviewFiles([])
   }
 
   const handleDocumentSelect = (document: Document) => {
@@ -176,9 +284,35 @@ export default function Home() {
                 </p>
               </div>
 
-              <FileUpload onFileSelect={handleFileUpload} />
+              <FileUpload onFileSelect={handleFileSelect} mode="preview" />
 
-              {uploadProgress > 0 && (
+              {showPreview && previewFiles.length > 0 && (
+                previewFiles.length === 1 ? (
+                  <FilePreview
+                    file={previewFiles[0]}
+                    onConfirm={(file) => handleConfirmUpload(file, false)}
+                    onConfirmWithSummary={(file) => handleConfirmUpload(file, true)}
+                    onCancel={handleCancelPreview}
+                    isUploading={isLoading}
+                    isSummarizing={isSummarizing}
+                  />
+                ) : (
+                  <BatchFilePreview
+                    files={previewFiles}
+                    onConfirmAll={(files) => handleBatchUpload(files, false)}
+                    onConfirmAllWithSummary={(files) => handleBatchUpload(files, true)}
+                    onConfirmSingle={(file) => handleConfirmUpload(file, false)}
+                    onConfirmSingleWithSummary={(file) => handleConfirmUpload(file, true)}
+                    onRemoveFile={handleRemoveFile}
+                    onCancel={handleCancelPreview}
+                    isUploading={isLoading}
+                    isSummarizing={isSummarizing}
+                    summaryProgress={summaryProgress}
+                  />
+                )
+              )}
+
+              {uploadProgress > 0 && !showPreview && (
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}

@@ -122,6 +122,16 @@ export class SupabaseService {
     }
   }
 
+  async updateDocumentSummary(id: string, summary: any): Promise<Document> {
+    const updates: Partial<Document> = {
+      summary: typeof summary === 'string' ? summary : JSON.stringify(summary),
+      summary_status: 'completed' as const,
+      updated_at: new Date()
+    }
+
+    return this.updateDocument(id, updates)
+  }
+
   async deleteDocument(id: string): Promise<void> {
     // まずドキュメント情報を取得
     const document = await this.getDocument(id)
