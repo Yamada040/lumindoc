@@ -1,19 +1,11 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { Document, Page, pdfjs } from 'react-pdf'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Download, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-
-// PDF.js workerの設定 - ブラウザでのみ実行
-// if (typeof window !== 'undefined') {
-//   pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-//     'pdfjs-dist/build/pdf.worker.min.js',
-//     import.meta.url
-//   ).toString()
-// }
 if (typeof window !== "undefined") {
   pdfjs.GlobalWorkerOptions.workerSrc = new URL(
     "pdfjs-dist/build/pdf.worker.min.mjs",
@@ -112,7 +104,7 @@ export function PDFViewerClient({ fileUrl, fileName, onClose, isModal = false }:
             <span className="ml-3 text-gray-600">PDFを読み込んでいます...</span>
           </div>
         )}
-        
+
         <div className="flex justify-center p-4">
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
@@ -149,7 +141,7 @@ export function PDFViewerClient({ fileUrl, fileName, onClose, isModal = false }:
             <ChevronLeft className="w-4 h-4 mr-1" />
             前のページ
           </button>
-          
+
           <div className="flex items-center space-x-4">
             <span className="text-sm text-gray-600">
               {pageNumber} / {numPages}
@@ -168,7 +160,7 @@ export function PDFViewerClient({ fileUrl, fileName, onClose, isModal = false }:
               className="w-16 px-2 py-1 text-center border border-gray-300 rounded text-sm"
             />
           </div>
-          
+
           <button
             onClick={goToNextPage}
             disabled={pageNumber >= numPages}
