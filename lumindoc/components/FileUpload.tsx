@@ -98,17 +98,15 @@ export function FileUpload({
 
   return (
     <div className="w-full max-w-2xl mx-auto">
-      <motion.div
+      <div
         {...getRootProps()}
         className={cn(
-          "relative border-2 border-dashed rounded-xl p-8 text-center transition-all duration-300 cursor-pointer",
-          "hover:border-blue-400 hover:bg-blue-50/50",
+          "relative border-2 border-dashed rounded-xl p-8 text-center transition-all duration-300 cursor-pointer transform",
+          "hover:border-blue-400 hover:bg-blue-50/50 hover:scale-105",
           isDragActive || dropzoneActive 
             ? "border-blue-500 bg-blue-50 scale-105" 
             : "border-gray-300 bg-gray-50/50"
         )}
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.98 }}
       >
         <input {...getInputProps()} />
         
@@ -155,7 +153,7 @@ export function FileUpload({
           animate={{ opacity: isDragActive ? 1 : 0 }}
           transition={{ duration: 0.2 }}
         />
-      </motion.div>
+      </div>
 
       <AnimatePresence>
         {mode === 'direct' && uploadedFiles.length > 0 && (
