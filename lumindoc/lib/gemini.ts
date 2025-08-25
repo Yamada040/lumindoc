@@ -42,13 +42,13 @@ ${content}
       const result = await this.model.generateContent(prompt)
       const response = await result.response
       const text = response.text()
-      
+
       // JSONレスポンスをパース
       const jsonMatch = text.match(/```json\n([\s\S]*?)\n```/) || text.match(/({[\s\S]*})/)
       if (!jsonMatch) {
         throw new Error('Invalid JSON response from Gemini')
       }
-      
+
       const summary: DetailedSummary = JSON.parse(jsonMatch[1] || jsonMatch[0])
       return summary
     } catch (error) {
@@ -80,17 +80,29 @@ ${content}
       reader.onload = async () => {
         try {
           const arrayBuffer = reader.result as ArrayBuffer
-          const uint8Array = new Uint8Array(arrayBuffer)
-          
-          // PDFから直接テキストを抽出する処理をここに実装
-          // 今回は簡易的にファイル名と基本情報のみを返す
-          const basicInfo = `ファイル名: ${file.name}\nファイルサイズ: ${file.size} bytes\nファイルタイプ: PDF`
+
+          // クライアントサイドでは基本情報のみを返す（PDF解析はサーバーサイドで実行）
+          const basicInfo = `
+PDFファイル: ${file.name}
+ファイルサイズ: ${(file.size / 1024).toFixed(2)} KB
+作成日時: ${new Date(file.lastModified).toLocaleString('ja-JP')}
+ファイルタイプ: PDF
+
+※注意: このファイルはPDFドキュメントです。
+サーバーサイドでの処理により、実際のテキスト内容が抽出されます。
+          `.trim()
+
+          console.log('PDF file prepared for server-side processing, size:', file.size)
           resolve(basicInfo)
         } catch (error) {
-          reject(error)
+          console.error('PDF file processing error:', error)
+          reject(new Error('PDFファイルの処理に失敗しました'))
         }
       }
-      reader.onerror = reject
+      reader.onerror = (error) => {
+        console.error('FileReader error:', error)
+        reject(new Error('ファイルの読み込みエラーが発生しました'))
+      }
       reader.readAsArrayBuffer(file)
     })
   }

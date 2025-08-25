@@ -11,6 +11,7 @@ interface FileUploadProps {
   maxFiles?: number
   maxSize?: number
   acceptedTypes?: string[]
+  mode?: 'direct' | 'preview' // 追加: directは従来通り、previewはプレビュー表示
 }
 
 interface UploadedFile {
@@ -25,7 +26,8 @@ export function FileUpload({
   onFileSelect, 
   maxFiles = 5, 
   maxSize = 10 * 1024 * 1024, // 10MB
-  acceptedTypes = ['.pdf', '.txt']
+  acceptedTypes = ['.pdf', '.txt'],
+  mode = 'preview' // デフォルトはプレビューモード
 }: FileUploadProps) {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
   const [isDragActive, setIsDragActive] = useState(false)
@@ -36,23 +38,28 @@ export function FileUpload({
       console.error('File rejected:', rejection.file.name, rejection.errors)
     })
 
-    // Process accepted files
-    const newFiles = acceptedFiles.map(file => ({
-      file,
-      id: Math.random().toString(36).substr(2, 9),
-      progress: 0,
-      status: 'uploading' as const
-    }))
+    if (mode === 'preview') {
+      // プレビューモードの場合は、ファイル選択のみでアップロードは行わない
+      onFileSelect(acceptedFiles)
+    } else {
+      // 従来のdirectモード
+      const newFiles = acceptedFiles.map(file => ({
+        file,
+        id: Math.random().toString(36).substr(2, 9),
+        progress: 0,
+        status: 'uploading' as const
+      }))
 
-    setUploadedFiles(prev => [...prev, ...newFiles])
+      setUploadedFiles(prev => [...prev, ...newFiles])
 
-    // Simulate upload progress
-    newFiles.forEach(({ id }) => {
-      simulateUpload(id)
-    })
+      // Simulate upload progress
+      newFiles.forEach(({ id }) => {
+        simulateUpload(id)
+      })
 
-    onFileSelect(acceptedFiles)
-  }, [onFileSelect])
+      onFileSelect(acceptedFiles)
+    }
+  }, [onFileSelect, mode])
 
   const simulateUpload = (fileId: string) => {
     let progress = 0
@@ -151,7 +158,7 @@ export function FileUpload({
       </motion.div>
 
       <AnimatePresence>
-        {uploadedFiles.length > 0 && (
+        {mode === 'direct' && uploadedFiles.length > 0 && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
