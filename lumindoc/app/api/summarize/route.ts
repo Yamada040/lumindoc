@@ -123,12 +123,12 @@ ${text}
   }
 }
 
-// サーバーサイドでのPDFテキスト抽出（基本情報ベース）
+// サーバーサイドでのPDFテキスト抽出
 async function extractPDFContent(file: File): Promise<string> {
   try {
-    console.log('Processing PDF file with basic info extraction, file size:', file.size)
+    console.log('Processing PDF file with pdf-parse, file size:', file.size)
     
-    // ファイルをBufferに変換して基本的なバリデーション
+    // ファイルをBufferに変換
     const arrayBuffer = await file.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
     
@@ -139,39 +139,65 @@ async function extractPDFContent(file: File): Promise<string> {
     console.log('PDF header check:', isPDF ? 'Valid PDF' : 'Invalid PDF header')
     
     if (!isPDF) {
-      return `
-ファイル: ${file.name}
-エラー: 有効なPDFファイルではありません
+      throw new Error('有効なPDFファイルではありません')
+    }
+    
+    try {
+      // pdf-parseを動的インポート（エラー回避のため）
+      const pdfParse = await import('pdf-parse')
+      const pdfData = await pdfParse.default(buffer)
+      
+      console.log('PDF parsed successfully. Pages:', pdfData.numpages, 'Text length:', pdfData.text.length)
+      
+      // PDFから抽出したテキストが空の場合
+      if (!pdfData.text || pdfData.text.trim().length === 0) {
+        console.warn('PDF contains no extractable text')
+        throw new Error('PDFから文字を抽出できませんでした（画像ベースのPDFの可能性があります）')
+      }
+      
+      // 抽出したテキストにメタデータを追加
+      const enrichedContent = `
+PDFファイル: ${file.name}
 ファイルサイズ: ${(file.size / 1024).toFixed(2)} KB
+総ページ数: ${pdfData.numpages}
+文字数: ${pdfData.text.length}
+アップロード日時: ${new Date().toLocaleString('ja-JP')}
 
-このファイルはPDF形式ではない可能性があります。
+===== PDF内容 =====
+${pdfData.text}
       `.trim()
-    }
+      
+      console.log('PDF text extraction successful, total content length:', enrichedContent.length)
+      return enrichedContent
+      
+    } catch (parseError) {
+      console.error('pdf-parse error:', parseError)
+      // pdf-parseが失敗した場合はフォールバック
+      
+      // バイト数からページ数を推定（簡易計算）
+      const estimatedPages = Math.max(1, Math.floor(file.size / 50000))
+      
+      // ファイルサイズから複雑さを推定
+      let complexityLevel = 'シンプル'
+      if (file.size > 5 * 1024 * 1024) { // 5MB以上
+        complexityLevel = '非常に詳細'
+      } else if (file.size > 1024 * 1024) { // 1MB以上
+        complexityLevel = '詳細'
+      } else if (file.size > 500 * 1024) { // 500KB以上
+        complexityLevel = '標準'
+      }
     
-    // バイト数からページ数を推定（簡易計算）
-    const estimatedPages = Math.max(1, Math.floor(file.size / 50000))
-    
-    // ファイルサイズから複雑さを推定
-    let complexityLevel = 'シンプル'
-    if (file.size > 5 * 1024 * 1024) { // 5MB以上
-      complexityLevel = '非常に詳細'
-    } else if (file.size > 1024 * 1024) { // 1MB以上
-      complexityLevel = '詳細'
-    } else if (file.size > 500 * 1024) { // 500KB以上
-      complexityLevel = '標準'
-    }
-    
-    // ファイル名から内容を推測
-    const fileName = file.name.toLowerCase()
-    let contentType = '一般文書'
-    if (fileName.includes('report') || fileName.includes('レポート')) contentType = 'レポート'
-    else if (fileName.includes('manual') || fileName.includes('マニュアル')) contentType = 'マニュアル'
-    else if (fileName.includes('contract') || fileName.includes('契約')) contentType = '契約書'
-    else if (fileName.includes('spec') || fileName.includes('仕様')) contentType = '仕様書'
-    else if (fileName.includes('proposal') || fileName.includes('提案')) contentType = '提案書'
-    
-    // 豊富な情報を含む疑似コンテンツを生成
-    const enrichedContent = `
+      // ファイル名から内容を推測
+      const fileName = file.name.toLowerCase()
+      let contentType = '一般文書'
+      if (fileName.includes('report') || fileName.includes('レポート')) contentType = 'レポート'
+      else if (fileName.includes('manual') || fileName.includes('マニュアル')) contentType = 'マニュアル'
+      else if (fileName.includes('contract') || fileName.includes('契約')) contentType = '契約書'
+      else if (fileName.includes('spec') || fileName.includes('仕様')) contentType = '仕様書'
+      else if (fileName.includes('proposal') || fileName.includes('提案')) contentType = '提案書'
+      
+      // 豊富な情報を含む疑似コンテンツを生成
+      const enrichedContent = `
 PDFファイル: ${file.name}
 ファイルサイズ: ${(file.size / 1024).toFixed(2)} KB
 アップロード日時: ${new Date().toLocaleString('ja-JP')}
@@ -200,10 +226,11 @@ PDFファイル: ${file.name}
 ※注意: この要約は、実際のPDFテキスト抽出ではなく、
 ファイル情報（名前、サイズ、形式）に基づいた推測分析です。
 より正確な要約には、PDF解析ライブラリの適切な設定が必要です。
-    `.trim()
-    
-    console.log('PDF basic analysis completed, content length:', enrichedContent.length)
-    return enrichedContent
+      `.trim()
+      
+      console.log('PDF basic analysis completed, content length:', enrichedContent.length)
+      return enrichedContent
+    }
     
   } catch (error) {
     console.error('PDF processing error:', error)

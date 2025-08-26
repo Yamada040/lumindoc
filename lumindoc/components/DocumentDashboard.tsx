@@ -16,7 +16,9 @@ import {
   Download,
   Trash2,
   Star,
-  Archive
+  Archive,
+  Brain,
+  Loader2
 } from 'lucide-react'
 import { Document } from '@/types'
 import { formatDate, formatFileSize, cn } from '@/lib/utils'
@@ -26,7 +28,9 @@ interface DocumentDashboardProps {
   onDocumentSelect: (document: Document) => void
   onDocumentDelete: (id: string) => void
   onDocumentDownload: (document: Document) => void
+  onDocumentSummarize?: (document: Document) => void
   isLoading?: boolean
+  summarizingDocs?: Set<string>
 }
 
 type ViewMode = 'grid' | 'list'
@@ -38,7 +42,9 @@ export function DocumentDashboard({
   onDocumentSelect,
   onDocumentDelete,
   onDocumentDownload,
-  isLoading = false
+  onDocumentSummarize,
+  isLoading = false,
+  summarizingDocs = new Set()
 }: DocumentDashboardProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
   const [sortBy, setSortBy] = useState<SortOption>('date')
@@ -214,8 +220,10 @@ export function DocumentDashboard({
                 onSelect={() => onDocumentSelect(doc)}
                 onDelete={() => onDocumentDelete(doc.id)}
                 onDownload={() => onDocumentDownload(doc)}
+                onSummarize={onDocumentSummarize ? () => onDocumentSummarize(doc) : undefined}
                 isSelected={selectedDocs.has(doc.id)}
                 onToggleSelect={() => toggleDocSelection(doc.id)}
+                isSummarizing={summarizingDocs.has(doc.id)}
               />
             ))}
           </AnimatePresence>
@@ -232,8 +240,10 @@ export function DocumentDashboard({
                   onSelect={() => onDocumentSelect(doc)}
                   onDelete={() => onDocumentDelete(doc.id)}
                   onDownload={() => onDocumentDownload(doc)}
+                  onSummarize={onDocumentSummarize ? () => onDocumentSummarize(doc) : undefined}
                   isSelected={selectedDocs.has(doc.id)}
                   onToggleSelect={() => toggleDocSelection(doc.id)}
+                  isSummarizing={summarizingDocs.has(doc.id)}
                 />
               ))}
             </AnimatePresence>
@@ -251,16 +261,20 @@ function DocumentCard({
   onSelect, 
   onDelete, 
   onDownload,
+  onSummarize,
   isSelected,
-  onToggleSelect
+  onToggleSelect,
+  isSummarizing = false
 }: {
   document: Document
   index: number
   onSelect: () => void
   onDelete: () => void
   onDownload: () => void
+  onSummarize?: () => void
   isSelected: boolean
   onToggleSelect: () => void
+  isSummarizing?: boolean
 }) {
   const [showActions, setShowActions] = useState(false)
 
@@ -314,6 +328,20 @@ function DocumentCard({
                 className="flex space-x-1"
                 onClick={(e) => e.stopPropagation()}
               >
+                {onSummarize && document.summary_status === 'pending' && (
+                  <button
+                    onClick={onSummarize}
+                    disabled={isSummarizing}
+                    className="p-1 hover:bg-purple-100 rounded disabled:opacity-50"
+                    title="AI要約を生成"
+                  >
+                    {isSummarizing ? (
+                      <Loader2 className="w-4 h-4 text-purple-600 animate-spin" />
+                    ) : (
+                      <Brain className="w-4 h-4 text-purple-600" />
+                    )}
+                  </button>
+                )}
                 <button
                   onClick={onDownload}
                   className="p-1 hover:bg-gray-100 rounded"
@@ -332,13 +360,18 @@ function DocumentCard({
         </div>
 
         {/* ステータス */}
-        <div className="mb-3">
+        <div className="mb-3 flex items-center justify-between">
           <span className={cn(
             "inline-flex items-center px-2 py-1 rounded-full text-xs font-medium",
             getSummaryStatusColor(document.summary_status)
           )}>
             {getSummaryStatusText(document.summary_status)}
           </span>
+          {document.summary_status === 'pending' && !isSummarizing && (
+            <span className="text-xs text-purple-600 font-medium">
+              要約可能
+            </span>
+          )}
         </div>
 
         {/* 日付 */}
@@ -358,16 +391,20 @@ function DocumentListItem({
   onSelect,
   onDelete,
   onDownload,
+  onSummarize,
   isSelected,
-  onToggleSelect
+  onToggleSelect,
+  isSummarizing = false
 }: {
   document: Document
   index: number
   onSelect: () => void
   onDelete: () => void
   onDownload: () => void
+  onSummarize?: () => void
   isSelected: boolean
   onToggleSelect: () => void
+  isSummarizing?: boolean
 }) {
   return (
     <motion.div
@@ -419,6 +456,20 @@ function DocumentListItem({
 
       {/* アクション */}
       <div className="flex space-x-1" onClick={(e) => e.stopPropagation()}>
+        {onSummarize && document.summary_status === 'pending' && (
+          <button
+            onClick={onSummarize}
+            disabled={isSummarizing}
+            className="p-2 hover:bg-purple-100 rounded-lg transition-colors disabled:opacity-50"
+            title="AI要約を生成"
+          >
+            {isSummarizing ? (
+              <Loader2 className="w-4 h-4 text-purple-600 animate-spin" />
+            ) : (
+              <Brain className="w-4 h-4 text-purple-600" />
+            )}
+          </button>
+        )}
         <button
           onClick={onDownload}
           className="p-2 hover:bg-gray-100 rounded-lg transition-colors"

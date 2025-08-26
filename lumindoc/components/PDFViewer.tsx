@@ -28,15 +28,29 @@ interface PDFViewerProps {
   fileName: string
   onClose?: () => void
   isModal?: boolean
+  onSummarize?: () => void
+  isSummarizing?: boolean
+  showSummarizeButton?: boolean
 }
 
-export function PDFViewer({ fileUrl, fileName, onClose, isModal = false }: PDFViewerProps) {
+export function PDFViewer({ 
+  fileUrl, 
+  fileName, 
+  onClose, 
+  isModal = false, 
+  onSummarize,
+  isSummarizing = false,
+  showSummarizeButton = false 
+}: PDFViewerProps) {
   return (
     <PDFViewerClient
       fileUrl={fileUrl}
       fileName={fileName}
       onClose={onClose}
       isModal={isModal}
+      onSummarize={onSummarize}
+      isSummarizing={isSummarizing}
+      showSummarizeButton={showSummarizeButton}
     />
   )
 }
