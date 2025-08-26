@@ -3,7 +3,7 @@
 import React, { useState } from 'react'
 import { Document, Page, pdfjs } from 'react-pdf'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Download, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Download, X, Brain, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 if (typeof window !== "undefined") {
@@ -18,9 +18,20 @@ interface PDFViewerClientProps {
   fileName: string
   onClose?: () => void
   isModal?: boolean
+  onSummarize?: () => void
+  isSummarizing?: boolean
+  showSummarizeButton?: boolean
 }
 
-export function PDFViewerClient({ fileUrl, fileName, onClose, isModal = false }: PDFViewerClientProps) {
+export function PDFViewerClient({ 
+  fileUrl, 
+  fileName, 
+  onClose, 
+  isModal = false,
+  onSummarize,
+  isSummarizing = false,
+  showSummarizeButton = false
+}: PDFViewerClientProps) {
   const [numPages, setNumPages] = useState<number>(0)
   const [pageNumber, setPageNumber] = useState<number>(1)
   const [scale, setScale] = useState<number>(1.0)
@@ -79,6 +90,26 @@ export function PDFViewerClient({ fileUrl, fileName, onClose, isModal = false }:
             <ZoomIn className="w-4 h-4" />
           </button>
           <div className="w-px h-6 bg-gray-300 mx-2" />
+          {showSummarizeButton && onSummarize && (
+            <button
+              onClick={onSummarize}
+              disabled={isSummarizing}
+              className="p-2 hover:bg-purple-200 rounded-lg transition-colors disabled:opacity-50 flex items-center space-x-1"
+              title="AI要約を生成"
+            >
+              {isSummarizing ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span className="text-xs">要約中...</span>
+                </>
+              ) : (
+                <>
+                  <Brain className="w-4 h-4 text-purple-600" />
+                  <span className="text-xs">AI要約</span>
+                </>
+              )}
+            </button>
+          )}
           <button
             onClick={handleDownload}
             className="p-2 hover:bg-gray-200 rounded-lg transition-colors"

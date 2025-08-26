@@ -122,11 +122,19 @@ export class SupabaseService {
     }
   }
 
-  async updateDocumentSummary(id: string, summary: any): Promise<Document> {
+  async updateDocumentSummary(id: string, summary: any, status?: string): Promise<Document> {
     const updates: Partial<Document> = {
-      summary: typeof summary === 'string' ? summary : JSON.stringify(summary),
-      summary_status: 'completed' as const,
       updated_at: new Date()
+    }
+    
+    if (summary !== null) {
+      updates.summary = typeof summary === 'string' ? summary : JSON.stringify(summary)
+    }
+    
+    if (status) {
+      updates.summary_status = status as any
+    } else if (summary !== null) {
+      updates.summary_status = 'completed' as const
     }
 
     return this.updateDocument(id, updates)

@@ -10,6 +10,8 @@ import { BatchFilePreview } from '@/components/BatchFilePreview'
 import { DocumentDashboard } from '@/components/DocumentDashboard'
 import { SummaryCard } from '@/components/SummaryCard'
 import { PDFViewer } from '@/components/PDFViewer'
+import { TextViewer } from '@/components/TextViewer'
+import { ToastContainer, useToast } from '@/components/Toast'
 import { supabaseService } from '@/lib/supabase'
 
 type AppView = 'home' | 'upload' | 'dashboard' | 'summary' | 'preview'
@@ -25,6 +27,8 @@ export default function Home() {
   const [showPreview, setShowPreview] = useState(false)
   const [isSummarizing, setIsSummarizing] = useState(false)
   const [summaryProgress, setSummaryProgress] = useState<{ [key: string]: boolean }>({})
+  const [summarizingDocs, setSummarizingDocs] = useState<Set<string>>(new Set())
+  const { toasts, showToast, removeToast, updateToast } = useToast()
 
   // ドキュメントを読み込み
   useEffect(() => {
@@ -48,6 +52,128 @@ export default function Home() {
     if (files.length > 0) {
       setPreviewFiles(files)
       setShowPreview(true)
+    }
+  }
+
+  // 既存ドキュメントの要約を生成
+  const generateSummaryFromDocument = async (document: Document) => {
+    if (!document.id || !document.public_url) {
+      console.error('Document ID or public URL is missing')
+      return
+    }
+
+    let toastId: string | undefined
+
+    try {
+      console.log('Starting summary generation for document:', document.original_name)
+      setSummarizingDocs(prev => new Set(prev).add(document.id))
+      
+      // 処理中の通知を表示
+      toastId = showToast({
+        type: 'loading',
+        title: 'AI要約を生成中...',
+        message: document.original_name,
+        duration: 0 // 永続的に表示
+      })
+      
+      // ドキュメントのステータスを「処理中」に更新
+      await supabaseService.updateDocumentSummary(document.id, null, 'processing')
+      await loadDocuments() // UIを更新
+
+      // ファイルをフェッチしてFormDataに追加
+      const response = await fetch(document.public_url)
+      if (!response.ok) {
+        throw new Error(`Failed to fetch document: ${response.status}`)
+      }
+      
+      const blob = await response.blob()
+      const file = new File([blob], document.original_name, { type: document.type === 'pdf' ? 'application/pdf' : 'text/plain' })
+      
+      const formData = new FormData()
+      formData.append('file', file)
+      
+      console.log('Sending request to /api/summarize')
+      const summaryResponse = await fetch('/api/summarize', {
+        method: 'POST',
+        body: formData
+      })
+      
+      if (!summaryResponse.ok) {
+        const errorText = await summaryResponse.text()
+        console.error('API Error Response:', errorText)
+        throw new Error(`Failed to generate summary: ${summaryResponse.status} - ${errorText}`)
+      }
+      
+      const result = await summaryResponse.json()
+      console.log('Summary API result:', result)
+      
+      if (result.error) {
+        throw new Error(`Summary generation error: ${result.error}`)
+      }
+      
+      if (result.summary) {
+        console.log('Updating document summary in database')
+        await supabaseService.updateDocumentSummary(document.id, result.summary, 'completed')
+        console.log('Document summary updated successfully')
+        
+        // 成功通知を表示
+        if (toastId) removeToast(toastId)
+        showToast({
+          type: 'success',
+          title: 'AI要約が完了しました！',
+          message: `${document.original_name} の要約を生成しました`,
+          duration: 5000
+        })
+        
+        // 成功音を再生（オプション）
+        try {
+          const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhCBxyw/PQgiMFJ3/M8ti5' +
+            'NwUZaLXs56hUFApGn+DyvmwhCBxyw/PQgiMFJ3/M8ti5ODcFGWi15+epVBQKRp/g8r9sIQgccsPz0IIjBSh/zPLYuDcGGWi15+epVBQKRp/g8r9sIQgccsPz0IIjBSh/zPLYuDcGGWi15+epVRQKRp/g8r9sIQgccsPz0IIjBSh/zPLYuDcHGWi15+epVRQKRp/g8r9sIQgccsPz0IIjBSh/zPLYuDg4GWi15+epVRQKRp/g8r9sIQgccsPz0IIjBSh/zPLYuDg4GWi15+epVRQKRp/g8r9sIQgccsPz0IIjBSh/zPLYuDg4GWi15+epVRQKRp/g8r9sIQgccsPz0IIjBSh/zPLYuDg4GWi15+epVRQKRp/g8r9sIQgccsPz0IIjBSh/zPLYuDg4GWi15+epVRQKRp/g8r9sIQgccsPz0IIjBSh/zPLYuDc4GWi15+epVRQKRp/f8r9sIQgccsPz0IIjBSh/zPLYuDc4GWi15+epVRQKRp/f8r9sIQgccsPz0IIkBSh+zPLYuDc3GWi15+eqVRQKRp/f8r9sIQgccsPz0IIkBSh+zPLYuDc3GWi15+eqVRQKRp/f8r9sIQgccsP=')
+          audio.volume = 0.3
+          audio.play().catch(() => {}) // 音が再生できなくても続行
+        } catch (e) {
+          // 音声再生エラーは無視
+        }
+        
+        // 2秒後にダッシュボードに戻る
+        setTimeout(() => {
+          setCurrentView('dashboard')
+        }, 2000)
+      } else {
+        console.warn('No summary in result:', result)
+        await supabaseService.updateDocumentSummary(document.id, null, 'error')
+        throw new Error('要約結果が空でした')
+      }
+      
+      await loadDocuments() // ドキュメントリストを更新
+      
+    } catch (error) {
+      console.error('Summary generation failed:', error)
+      
+      // エラー通知を表示
+      if (toastId) removeToast(toastId)
+      showToast({
+        type: 'error',
+        title: 'AI要約の生成に失敗しました',
+        message: error instanceof Error ? error.message : '不明なエラーが発生しました',
+        duration: 7000
+      })
+      
+      // エラー状態に更新
+      if (document.id) {
+        try {
+          await supabaseService.updateDocumentSummary(document.id, null, 'error')
+          await loadDocuments()
+        } catch (updateError) {
+          console.error('Failed to update error status:', updateError)
+        }
+      }
+    } finally {
+      setSummarizingDocs(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(document.id)
+        return newSet
+      })
     }
   }
 
@@ -133,10 +259,37 @@ export default function Home() {
       // AI要約を実行する場合
       if (withSummary && savedDoc.id) {
         setIsSummarizing(true)
+        
+        // AI要約中の通知
+        const summaryToastId = showToast({
+          type: 'loading',
+          title: 'AI要約を生成中...',
+          message: file.name,
+          duration: 0
+        })
+        
         try {
           await generateSummary(file, savedDoc.id)
+          
+          // 成功通知
+          removeToast(summaryToastId)
+          showToast({
+            type: 'success',
+            title: 'AI要約が完了しました！',
+            message: `${file.name} の要約を生成しました`,
+            duration: 5000
+          })
         } catch (error) {
           console.error('Summary generation failed:', error)
+          
+          // エラー通知
+          removeToast(summaryToastId)
+          showToast({
+            type: 'error',
+            title: 'AI要約の生成に失敗しました',
+            message: file.name,
+            duration: 7000
+          })
         } finally {
           setIsSummarizing(false)
         }
@@ -200,8 +353,20 @@ export default function Home() {
     try {
       await supabaseService.deleteDocument(id)
       await loadDocuments()
+      
+      showToast({
+        type: 'success',
+        title: 'ドキュメントを削除しました',
+        duration: 3000
+      })
     } catch (error) {
       console.error('Delete failed:', error)
+      showToast({
+        type: 'error',
+        title: '削除に失敗しました',
+        message: error instanceof Error ? error.message : '不明なエラー',
+        duration: 5000
+      })
     }
   }
 
@@ -213,6 +378,9 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+      {/* 通知コンテナ */}
+      <ToastContainer toasts={toasts} onClose={removeToast} />
+      
       {/* ヘッダー */}
       <header className="bg-white/80 backdrop-blur-sm border-b border-gray-200 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -348,7 +516,9 @@ export default function Home() {
                 onDocumentSelect={handleDocumentSelect}
                 onDocumentDelete={handleDocumentDelete}
                 onDocumentDownload={handleDocumentDownload}
+                onDocumentSummarize={generateSummaryFromDocument}
                 isLoading={isLoading}
+                summarizingDocs={summarizingDocs}
               />
             </motion.div>
           )}
@@ -384,12 +554,27 @@ export default function Home() {
               exit={{ opacity: 0 }}
               className="fixed inset-0 z-50"
             >
-              <PDFViewer
-                fileUrl={selectedDocument.public_url!}
-                fileName={selectedDocument.original_name}
-                onClose={() => setCurrentView('dashboard')}
-                isModal={true}
-              />
+              {selectedDocument.type === 'pdf' ? (
+                <PDFViewer
+                  fileUrl={selectedDocument.public_url!}
+                  fileName={selectedDocument.original_name}
+                  onClose={() => setCurrentView('dashboard')}
+                  isModal={true}
+                  onSummarize={selectedDocument.summary_status === 'pending' ? () => generateSummaryFromDocument(selectedDocument) : undefined}
+                  isSummarizing={summarizingDocs.has(selectedDocument.id)}
+                  showSummarizeButton={selectedDocument.summary_status === 'pending'}
+                />
+              ) : (
+                <TextViewer
+                  fileUrl={selectedDocument.public_url!}
+                  fileName={selectedDocument.original_name}
+                  onClose={() => setCurrentView('dashboard')}
+                  isModal={true}
+                  onSummarize={selectedDocument.summary_status === 'pending' ? () => generateSummaryFromDocument(selectedDocument) : undefined}
+                  isSummarizing={summarizingDocs.has(selectedDocument.id)}
+                  showSummarizeButton={selectedDocument.summary_status === 'pending'}
+                />
+              )}
             </motion.div>
           )}
         </AnimatePresence>
