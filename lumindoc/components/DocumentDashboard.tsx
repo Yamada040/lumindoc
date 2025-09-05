@@ -2,12 +2,12 @@
 
 import React, { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { 
-  Search, 
-  Filter, 
-  Grid3X3, 
-  List, 
-  FileText, 
+import {
+  Search,
+  Filter,
+  Grid3X3,
+  List,
+  FileText,
   Calendar,
   Clock,
   Tag,
@@ -29,6 +29,7 @@ interface DocumentDashboardProps {
   onDocumentDelete: (id: string) => void
   onDocumentDownload: (document: Document) => void
   onDocumentSummarize?: (document: Document) => void
+  onSummaryDownload?: (document: Document) => void
   isLoading?: boolean
   summarizingDocs?: Set<string>
 }
@@ -43,6 +44,7 @@ export function DocumentDashboard({
   onDocumentDelete,
   onDocumentDownload,
   onDocumentSummarize,
+  onSummaryDownload,
   isLoading = false,
   summarizingDocs = new Set()
 }: DocumentDashboardProps) {
@@ -58,13 +60,13 @@ export function DocumentDashboard({
     let filtered = documents.filter(doc => {
       // 検索フィルター
       const matchesSearch = doc.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                           doc.original_name.toLowerCase().includes(searchQuery.toLowerCase())
-      
+        doc.original_name.toLowerCase().includes(searchQuery.toLowerCase())
+
       // タイプフィルター
-      const matchesFilter = filterBy === 'all' || 
-                           filterBy === doc.type ||
-                           filterBy === doc.summary_status
-      
+      const matchesFilter = filterBy === 'all' ||
+        filterBy === doc.type ||
+        filterBy === doc.summary_status
+
       return matchesSearch && matchesFilter
     })
 
@@ -235,6 +237,7 @@ export function DocumentDashboard({
                 onDelete={() => onDocumentDelete(doc.id)}
                 onDownload={() => handleDownload(doc)}
                 onSummarize={onDocumentSummarize ? () => onDocumentSummarize(doc) : undefined}
+                onSummaryDownload={onSummaryDownload ? () => onSummaryDownload(doc) : undefined}
                 isSelected={selectedDocs.has(doc.id)}
                 onToggleSelect={() => toggleDocSelection(doc.id)}
                 isSummarizing={summarizingDocs.has(doc.id)}
@@ -256,6 +259,7 @@ export function DocumentDashboard({
                   onDelete={() => onDocumentDelete(doc.id)}
                   onDownload={() => handleDownload(doc)}
                   onSummarize={onDocumentSummarize ? () => onDocumentSummarize(doc) : undefined}
+                  onSummaryDownload={onSummaryDownload ? () => onSummaryDownload(doc) : undefined}
                   isSelected={selectedDocs.has(doc.id)}
                   onToggleSelect={() => toggleDocSelection(doc.id)}
                   isSummarizing={summarizingDocs.has(doc.id)}
@@ -271,13 +275,14 @@ export function DocumentDashboard({
 }
 
 // ドキュメントカードコンポーネント
-function DocumentCard({ 
-  document, 
-  index, 
-  onSelect, 
-  onDelete, 
+function DocumentCard({
+  document,
+  index,
+  onSelect,
+  onDelete,
   onDownload,
   onSummarize,
+  onSummaryDownload,
   isSelected,
   onToggleSelect,
   isSummarizing = false,
@@ -289,6 +294,7 @@ function DocumentCard({
   onDelete: () => void
   onDownload: () => void
   onSummarize?: () => void
+  onSummaryDownload?: () => void
   isSelected: boolean
   onToggleSelect: () => void
   isSummarizing?: boolean
@@ -324,8 +330,8 @@ function DocumentCard({
               )} />
             </div>
             <div className="ml-3 flex-1 min-w-0">
-              <h3 
-                className="text-sm font-semibold text-gray-900 truncate leading-tight" 
+              <h3
+                className="text-sm font-semibold text-gray-900 truncate leading-tight"
                 title={document.original_name}
               >
                 {document.original_name}
@@ -335,7 +341,7 @@ function DocumentCard({
               </p>
             </div>
           </div>
-          
+
           {/* アクション */}
           <AnimatePresence>
             {showActions && (
@@ -364,7 +370,7 @@ function DocumentCard({
                   onClick={onDownload}
                   disabled={isDownloading}
                   className="p-1 hover:bg-gray-100 rounded disabled:opacity-50"
-                  title="ダウンロード"
+                  title="ファイルをダウンロード"
                 >
                   {isDownloading ? (
                     <Loader2 className="w-4 h-4 text-gray-600 animate-spin" />
@@ -372,6 +378,15 @@ function DocumentCard({
                     <Download className="w-4 h-4 text-gray-600" />
                   )}
                 </button>
+                {onSummaryDownload && document.summary_status === 'completed' && (
+                  <button
+                    onClick={onSummaryDownload}
+                    className="p-1 hover:bg-purple-100 rounded"
+                    title="AI要約をダウンロード"
+                  >
+                    <FileText className="w-4 h-4 text-purple-600" />
+                  </button>
+                )}
                 <button
                   onClick={onDelete}
                   className="p-1 hover:bg-red-100 rounded"
@@ -416,6 +431,7 @@ function DocumentListItem({
   onDelete,
   onDownload,
   onSummarize,
+  onSummaryDownload,
   isSelected,
   onToggleSelect,
   isSummarizing = false,
@@ -427,6 +443,7 @@ function DocumentListItem({
   onDelete: () => void
   onDownload: () => void
   onSummarize?: () => void
+  onSummaryDownload?: () => void
   isSelected: boolean
   onToggleSelect: () => void
   isSummarizing?: boolean
@@ -457,8 +474,8 @@ function DocumentListItem({
 
       {/* ファイル情報 */}
       <div className="flex-1 min-w-0 mr-4">
-        <h3 
-          className="text-sm font-medium text-gray-900 truncate leading-tight" 
+        <h3
+          className="text-sm font-medium text-gray-900 truncate leading-tight"
           title={document.original_name}
         >
           {document.original_name}
@@ -500,7 +517,7 @@ function DocumentListItem({
           onClick={onDownload}
           disabled={isDownloading}
           className="p-2 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
-          title="ダウンロード"
+          title="ファイルをダウンロード"
         >
           {isDownloading ? (
             <Loader2 className="w-4 h-4 text-gray-600 animate-spin" />
@@ -508,6 +525,15 @@ function DocumentListItem({
             <Download className="w-4 h-4 text-gray-600" />
           )}
         </button>
+        {onSummaryDownload && document.summary_status === 'completed' && (
+          <button
+            onClick={onSummaryDownload}
+            className="p-2 hover:bg-purple-100 rounded-lg transition-colors"
+            title="AI要約をダウンロード"
+          >
+            <FileText className="w-4 h-4 text-purple-600" />
+          </button>
+        )}
         <button
           onClick={onDelete}
           className="p-2 hover:bg-red-100 rounded-lg transition-colors"
