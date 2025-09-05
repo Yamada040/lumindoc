@@ -3,7 +3,6 @@
 import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
-  ChevronDown, 
   ChevronUp, 
   Sparkles, 
   BookOpen, 
@@ -15,10 +14,14 @@ import {
   CheckCircle2,
   Copy,
   Share2,
-  Star
+  Star,
+  Download,
+  FileText,
+  ChevronDown
 } from 'lucide-react'
 import { DetailedSummary } from '@/types'
 import { cn } from '@/lib/utils'
+import { SummaryExportService } from '@/lib/summaryExport'
 
 interface SummaryCardProps {
   summary: DetailedSummary
@@ -37,6 +40,7 @@ export function SummaryCard({
 }: SummaryCardProps) {
   const [expandedSections, setExpandedSections] = useState<Set<number>>(new Set([0]))
   const [showFullOverview, setShowFullOverview] = useState(false)
+  const [isDownloading, setIsDownloading] = useState(false)
 
   const toggleSection = (index: number) => {
     const newExpanded = new Set(expandedSections)
@@ -46,6 +50,17 @@ export function SummaryCard({
       newExpanded.add(index)
     }
     setExpandedSections(newExpanded)
+  }
+
+  const handleDownloadSummary = async () => {
+    setIsDownloading(true)
+    try {
+      SummaryExportService.exportSummaryAsText(summary, fileName)
+    } catch (error) {
+      console.error('Download failed:', error)
+    } finally {
+      setIsDownloading(false)
+    }
   }
 
   const getDifficultyColor = (difficulty: string) => {
@@ -114,10 +129,26 @@ export function SummaryCard({
           </div>
           
           <div className="flex space-x-2">
+            <button
+              onClick={handleDownloadSummary}
+              disabled={isDownloading}
+              className="p-2 hover:bg-white/20 rounded-lg transition-colors disabled:opacity-50"
+              title="要約をテキストファイルでダウンロード"
+            >
+              {isDownloading ? (
+                <div className="w-5 h-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+              ) : (
+                <div className="flex items-center space-x-1">
+                  <Download className="w-5 h-5" />
+                  <FileText className="w-4 h-4" />
+                </div>
+              )}
+            </button>
             {onCopySummary && (
               <button
                 onClick={onCopySummary}
                 className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+                title="要約をクリップボードにコピー"
               >
                 <Copy className="w-5 h-5" />
               </button>
@@ -126,6 +157,7 @@ export function SummaryCard({
               <button
                 onClick={onShareSummary}
                 className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+                title="要約を共有"
               >
                 <Share2 className="w-5 h-5" />
               </button>

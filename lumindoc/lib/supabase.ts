@@ -188,6 +188,53 @@ export class SupabaseService {
 
     return data.publicUrl
   }
+
+  async downloadDocument(document: Document): Promise<void> {
+    // ブラウザ環境でのみ実行
+    if (typeof window === 'undefined') {
+      throw new Error('ダウンロードはブラウザでのみ実行できます')
+    }
+
+    try {
+      let blob: Blob
+      let fileName = document.original_name
+
+      if (document.file_path) {
+        // Supabase Storageからファイルをダウンロード
+        blob = await this.downloadFile(document.file_path)
+      } else if (document.public_url) {
+        // public_urlからファイルを取得
+        const response = await fetch(document.public_url)
+        if (!response.ok) {
+          throw new Error(`ファイルの取得に失敗しました: ${response.status}`)
+        }
+        blob = await response.blob()
+      } else {
+        throw new Error('ダウンロード可能なファイルが見つかりません')
+      }
+
+      // Blobから一時的なダウンロードリンクを作成
+      const url = window.URL.createObjectURL(blob)
+      
+      // ダウンロードリンクを作成してクリック
+      const link = window.document.createElement('a')
+      link.href = url
+      link.download = fileName
+      link.style.display = 'none'
+      
+      window.document.body.appendChild(link)
+      link.click()
+      
+      // クリーンアップ
+      setTimeout(() => {
+        window.document.body.removeChild(link)
+        window.URL.revokeObjectURL(url)
+      }, 100)
+    } catch (error) {
+      console.error('Download failed:', error)
+      throw error
+    }
+  }
 }
 
 export const supabaseService = new SupabaseService()

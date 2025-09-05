@@ -371,8 +371,72 @@ export default function Home() {
   }
 
   const handleDocumentDownload = async (document: Document) => {
-    if (document.public_url) {
-      window.open(document.public_url, '_blank')
+    try {
+      const toastId = showToast({
+        type: 'loading',
+        title: 'ダウンロード中...',
+        message: document.original_name,
+        duration: 0
+      })
+      
+      await supabaseService.downloadDocument(document)
+      
+      removeToast(toastId)
+      showToast({
+        type: 'success',
+        title: 'ダウンロード完了',
+        message: document.original_name,
+        duration: 3000
+      })
+    } catch (error) {
+      console.error('Download failed:', error)
+      showToast({
+        type: 'error',
+        title: 'ダウンロードに失敗しました',
+        message: error instanceof Error ? error.message : '不明なエラー',
+        duration: 5000
+      })
+    }
+  }
+
+  const handleSummaryDownload = async (document: Document) => {
+    try {
+      if (!document.summary) {
+        showToast({
+          type: 'error',
+          title: 'エラー',
+          message: '要約データがありません',
+          duration: 3000
+        })
+        return
+      }
+
+      const toastId = showToast({
+        type: 'loading',
+        title: 'AI要約をダウンロード中...',
+        message: document.original_name,
+        duration: 0
+      })
+
+      const summary: DetailedSummary = JSON.parse(document.summary as string)
+      const { SummaryExportService } = await import('@/lib/summaryExport')
+      SummaryExportService.exportSummaryAsText(summary, document.original_name)
+
+      removeToast(toastId)
+      showToast({
+        type: 'success',
+        title: 'AI要約ダウンロード完了',
+        message: document.original_name,
+        duration: 3000
+      })
+    } catch (error) {
+      console.error('Summary download failed:', error)
+      showToast({
+        type: 'error',
+        title: 'AI要約ダウンロードに失敗しました',
+        message: error instanceof Error ? error.message : '不明なエラー',
+        duration: 5000
+      })
     }
   }
 
@@ -517,6 +581,7 @@ export default function Home() {
                 onDocumentDelete={handleDocumentDelete}
                 onDocumentDownload={handleDocumentDownload}
                 onDocumentSummarize={generateSummaryFromDocument}
+                onSummaryDownload={handleSummaryDownload}
                 isLoading={isLoading}
                 summarizingDocs={summarizingDocs}
               />
