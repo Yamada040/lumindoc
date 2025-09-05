@@ -371,8 +371,31 @@ export default function Home() {
   }
 
   const handleDocumentDownload = async (document: Document) => {
-    if (document.public_url) {
-      window.open(document.public_url, '_blank')
+    try {
+      const toastId = showToast({
+        type: 'loading',
+        title: 'ダウンロード中...',
+        message: document.original_name,
+        duration: 0
+      })
+      
+      await supabaseService.downloadDocument(document)
+      
+      removeToast(toastId)
+      showToast({
+        type: 'success',
+        title: 'ダウンロード完了',
+        message: document.original_name,
+        duration: 3000
+      })
+    } catch (error) {
+      console.error('Download failed:', error)
+      showToast({
+        type: 'error',
+        title: 'ダウンロードに失敗しました',
+        message: error instanceof Error ? error.message : '不明なエラー',
+        duration: 5000
+      })
     }
   }
 

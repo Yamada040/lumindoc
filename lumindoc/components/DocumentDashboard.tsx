@@ -51,6 +51,7 @@ export function DocumentDashboard({
   const [filterBy, setFilterBy] = useState<FilterOption>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedDocs, setSelectedDocs] = useState<Set<string>>(new Set())
+  const [downloadingDocs, setDownloadingDocs] = useState<Set<string>>(new Set())
 
   // フィルタリングとソート
   const filteredAndSortedDocs = useMemo(() => {
@@ -94,6 +95,19 @@ export function DocumentDashboard({
       newSelected.add(docId)
     }
     setSelectedDocs(newSelected)
+  }
+
+  const handleDownload = async (doc: Document) => {
+    setDownloadingDocs(prev => new Set(prev).add(doc.id))
+    try {
+      await onDocumentDownload(doc)
+    } finally {
+      setDownloadingDocs(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(doc.id)
+        return newSet
+      })
+    }
   }
 
   const getSummaryStatusColor = (status: string) => {
@@ -219,11 +233,12 @@ export function DocumentDashboard({
                 index={index}
                 onSelect={() => onDocumentSelect(doc)}
                 onDelete={() => onDocumentDelete(doc.id)}
-                onDownload={() => onDocumentDownload(doc)}
+                onDownload={() => handleDownload(doc)}
                 onSummarize={onDocumentSummarize ? () => onDocumentSummarize(doc) : undefined}
                 isSelected={selectedDocs.has(doc.id)}
                 onToggleSelect={() => toggleDocSelection(doc.id)}
                 isSummarizing={summarizingDocs.has(doc.id)}
+                isDownloading={downloadingDocs.has(doc.id)}
               />
             ))}
           </AnimatePresence>
@@ -239,11 +254,12 @@ export function DocumentDashboard({
                   index={index}
                   onSelect={() => onDocumentSelect(doc)}
                   onDelete={() => onDocumentDelete(doc.id)}
-                  onDownload={() => onDocumentDownload(doc)}
+                  onDownload={() => handleDownload(doc)}
                   onSummarize={onDocumentSummarize ? () => onDocumentSummarize(doc) : undefined}
                   isSelected={selectedDocs.has(doc.id)}
                   onToggleSelect={() => toggleDocSelection(doc.id)}
                   isSummarizing={summarizingDocs.has(doc.id)}
+                  isDownloading={downloadingDocs.has(doc.id)}
                 />
               ))}
             </AnimatePresence>
@@ -264,7 +280,8 @@ function DocumentCard({
   onSummarize,
   isSelected,
   onToggleSelect,
-  isSummarizing = false
+  isSummarizing = false,
+  isDownloading = false
 }: {
   document: Document
   index: number
@@ -275,6 +292,7 @@ function DocumentCard({
   isSelected: boolean
   onToggleSelect: () => void
   isSummarizing?: boolean
+  isDownloading?: boolean
 }) {
   const [showActions, setShowActions] = useState(false)
 
@@ -344,9 +362,15 @@ function DocumentCard({
                 )}
                 <button
                   onClick={onDownload}
-                  className="p-1 hover:bg-gray-100 rounded"
+                  disabled={isDownloading}
+                  className="p-1 hover:bg-gray-100 rounded disabled:opacity-50"
+                  title="ダウンロード"
                 >
-                  <Download className="w-4 h-4 text-gray-600" />
+                  {isDownloading ? (
+                    <Loader2 className="w-4 h-4 text-gray-600 animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4 text-gray-600" />
+                  )}
                 </button>
                 <button
                   onClick={onDelete}
@@ -394,7 +418,8 @@ function DocumentListItem({
   onSummarize,
   isSelected,
   onToggleSelect,
-  isSummarizing = false
+  isSummarizing = false,
+  isDownloading = false
 }: {
   document: Document
   index: number
@@ -405,6 +430,7 @@ function DocumentListItem({
   isSelected: boolean
   onToggleSelect: () => void
   isSummarizing?: boolean
+  isDownloading?: boolean
 }) {
   return (
     <motion.div
@@ -472,9 +498,15 @@ function DocumentListItem({
         )}
         <button
           onClick={onDownload}
-          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+          disabled={isDownloading}
+          className="p-2 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+          title="ダウンロード"
         >
-          <Download className="w-4 h-4 text-gray-600" />
+          {isDownloading ? (
+            <Loader2 className="w-4 h-4 text-gray-600 animate-spin" />
+          ) : (
+            <Download className="w-4 h-4 text-gray-600" />
+          )}
         </button>
         <button
           onClick={onDelete}
