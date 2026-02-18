@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useCallback, useState } from 'react'
-import { useDropzone } from 'react-dropzone'
+import { useDropzone, FileRejection } from 'react-dropzone'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Upload, FileText, AlertCircle, CheckCircle2, X } from 'lucide-react'
 import { cn, formatFileSize } from '@/lib/utils'
@@ -22,6 +22,25 @@ interface UploadedFile {
   error?: string
 }
 
+const toDropzoneAccept = (acceptedTypes: string[]) => {
+  const normalized = acceptedTypes.map((type) => type.toLowerCase())
+  const accept: Record<string, string[]> = {}
+
+  if (normalized.includes('.pdf')) {
+    accept['application/pdf'] = ['.pdf']
+  }
+  if (normalized.includes('.txt')) {
+    accept['text/plain'] = ['.txt']
+  }
+
+  return Object.keys(accept).length > 0
+    ? accept
+    : {
+        'application/pdf': ['.pdf'],
+        'text/plain': ['.txt']
+      }
+}
+
 export function FileUpload({ 
   onFileSelect, 
   maxFiles = 5, 
@@ -32,7 +51,7 @@ export function FileUpload({
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
   const [isDragActive, setIsDragActive] = useState(false)
 
-  const onDrop = useCallback((acceptedFiles: File[], rejectedFiles: any[]) => {
+  const onDrop = useCallback((acceptedFiles: File[], rejectedFiles: FileRejection[]) => {
     // Handle rejected files
     rejectedFiles.forEach(rejection => {
       console.error('File rejected:', rejection.file.name, rejection.errors)
@@ -87,10 +106,7 @@ export function FileUpload({
     onDrop,
     onDragEnter: () => setIsDragActive(true),
     onDragLeave: () => setIsDragActive(false),
-    accept: {
-      'application/pdf': ['.pdf'],
-      'text/plain': ['.txt']
-    },
+    accept: toDropzoneAccept(acceptedTypes),
     maxFiles,
     maxSize,
     multiple: true

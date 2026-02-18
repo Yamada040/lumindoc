@@ -16,6 +16,31 @@ import { supabaseService } from '@/lib/supabase'
 
 type AppView = 'home' | 'upload' | 'dashboard' | 'summary' | 'preview'
 
+type SummarizeApiResponse = {
+  summary?: DetailedSummary
+  error?: string
+}
+
+class SummarizeApiError extends Error {
+  readonly status: number
+
+  constructor(status: number, message: string) {
+    super(message)
+    this.name = 'SummarizeApiError'
+    this.status = status
+  }
+}
+
+function parseSummary(summary: Document['summary']): DetailedSummary | null {
+  if (!summary || typeof summary !== 'string') return null
+
+  try {
+    return JSON.parse(summary) as DetailedSummary
+  } catch {
+    return null
+  }
+}
+
 export default function Home() {
   const [currentView, setCurrentView] = useState<AppView>('home')
   const [documents, setDocuments] = useState<Document[]>([])
@@ -31,6 +56,29 @@ export default function Home() {
   const { toasts, showToast, removeToast } = useToast()
   const isQuotaError = (status: number, message: string) =>
     status === 429 || message.includes('利用上限') || message.toLowerCase().includes('quota')
+
+  const requestSummary = async (file: File): Promise<DetailedSummary> => {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    const response = await fetch('/api/summarize', {
+      method: 'POST',
+      body: formData
+    })
+
+    const result: SummarizeApiResponse = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      const errorMessage =
+        typeof result.error === 'string' ? result.error : `要約APIエラー: ${response.status}`
+      throw new SummarizeApiError(response.status, errorMessage)
+    }
+
+    if (!result.summary) {
+      throw new Error('要約結果が空でした')
+    }
+
+    return result.summary
+  }
 
   // ドキュメントを読み込み
   useEffect(() => {
@@ -90,63 +138,39 @@ export default function Home() {
       const blob = await response.blob()
       const file = new File([blob], document.original_name, { type: document.type === 'pdf' ? 'application/pdf' : 'text/plain' })
       
-      const formData = new FormData()
-      formData.append('file', file)
+      const summary = await requestSummary(file)
+      await supabaseService.updateDocumentSummary(document.id, summary, 'completed')
       
-      const summaryResponse = await fetch('/api/summarize', {
-        method: 'POST',
-        body: formData
+      // 成功通知を表示
+      if (toastId) removeToast(toastId)
+      showToast({
+        type: 'success',
+        title: 'AI要約が完了しました！',
+        message: `${document.original_name} の要約を生成しました`,
+        duration: 5000
       })
-
-      const result = await summaryResponse.json().catch(() => ({}))
-      if (!summaryResponse.ok) {
-        const errorMessage = typeof result?.error === 'string' ? result.error : `要約APIエラー: ${summaryResponse.status}`
-
-        if (isQuotaError(summaryResponse.status, errorMessage)) {
-          await supabaseService.updateDocumentSummary(document.id, null, 'pending')
-          await loadDocuments()
-          if (toastId) removeToast(toastId)
-          showToast({
-            type: 'info',
-            title: 'API利用上限に達しました',
-            message: 'しばらく待ってから再試行してください。',
-            duration: 5000
-          })
-          return
-        }
-
-        throw new Error(errorMessage)
-      }
-
-      if (result.error) {
-        throw new Error(`Summary generation error: ${result.error}`)
-      }
       
-      if (result.summary) {
-        await supabaseService.updateDocumentSummary(document.id, result.summary, 'completed')
-        
-        // 成功通知を表示
-        if (toastId) removeToast(toastId)
-        showToast({
-          type: 'success',
-          title: 'AI要約が完了しました！',
-          message: `${document.original_name} の要約を生成しました`,
-          duration: 5000
-        })
-        
-        // 2秒後にダッシュボードに戻る
-        setTimeout(() => {
-          setCurrentView('dashboard')
-        }, 2000)
-      } else {
-        console.warn('No summary in result:', result)
-        await supabaseService.updateDocumentSummary(document.id, null, 'error')
-        throw new Error('要約結果が空でした')
-      }
+      // 2秒後にダッシュボードに戻る
+      setTimeout(() => {
+        setCurrentView('dashboard')
+      }, 2000)
       
       await loadDocuments() // ドキュメントリストを更新
       
     } catch (error) {
+      if (error instanceof SummarizeApiError && isQuotaError(error.status, error.message)) {
+        await supabaseService.updateDocumentSummary(document.id, null, 'pending')
+        await loadDocuments()
+        if (toastId) removeToast(toastId)
+        showToast({
+          type: 'info',
+          title: 'API利用上限に達しました',
+          message: 'しばらく待ってから再試行してください。',
+          duration: 5000
+        })
+        return
+      }
+
       console.error('Summary generation failed:', error)
       
       // エラー通知を表示
@@ -183,45 +207,25 @@ export default function Home() {
   const generateSummary = async (file: File, documentId: string): Promise<DetailedSummary | null> => {
     try {
       setSummaryProgress(prev => ({ ...prev, [file.name]: true }))
-      
-      const formData = new FormData()
-      formData.append('file', file)
-      
-      const response = await fetch('/api/summarize', {
-        method: 'POST',
-        body: formData
-      })
 
-      const result = await response.json().catch(() => ({}))
-      if (!response.ok) {
-        const errorMessage = typeof result?.error === 'string' ? result.error : `要約APIエラー: ${response.status}`
-
-        if (isQuotaError(response.status, errorMessage)) {
-          await supabaseService.updateDocumentSummary(documentId, null, 'pending')
-          showToast({
-            type: 'info',
-            title: 'API利用上限に達しました',
-            message: 'しばらく待ってから再試行してください。',
-            duration: 5000
-          })
-          setSummaryProgress(prev => ({ ...prev, [file.name]: false }))
-          return null
-        }
-
-        throw new Error(errorMessage)
-      }
-
-      if (result.error) {
-        throw new Error(`Summary generation error: ${result.error}`)
-      }
-      
-      if (result.summary) {
-        await supabaseService.updateDocumentSummary(documentId, result.summary)
-      }
+      const summary = await requestSummary(file)
+      await supabaseService.updateDocumentSummary(documentId, summary)
       
       setSummaryProgress(prev => ({ ...prev, [file.name]: false }))
-      return result.summary as DetailedSummary
+      return summary
     } catch (error) {
+      if (error instanceof SummarizeApiError && isQuotaError(error.status, error.message)) {
+        await supabaseService.updateDocumentSummary(documentId, null, 'pending')
+        showToast({
+          type: 'info',
+          title: 'API利用上限に達しました',
+          message: 'しばらく待ってから再試行してください。',
+          duration: 5000
+        })
+        setSummaryProgress(prev => ({ ...prev, [file.name]: false }))
+        return null
+      }
+
       console.error('Summary generation failed:', error)
       setSummaryProgress(prev => ({ ...prev, [file.name]: false }))
       throw error
@@ -234,7 +238,7 @@ export default function Home() {
       setIsLoading(true)
       setUploadProgress(0)
 
-      // 1. ファイルをSupabaseにアップロード
+      // 1. ファイルをローカル保存用URLとして保持
       const { url, path } = await supabaseService.uploadFile(file)
       setUploadProgress(30)
 
@@ -339,8 +343,9 @@ export default function Home() {
 
   const handleDocumentSelect = (document: Document) => {
     setSelectedDocument(document)
-    if (document.summary) {
-      setCurrentSummary(JSON.parse(document.summary as string))
+    const summary = parseSummary(document.summary)
+    if (summary) {
+      setCurrentSummary(summary)
       setCurrentView('summary')
     } else {
       setCurrentView('preview')
@@ -416,7 +421,17 @@ export default function Home() {
         duration: 0
       })
 
-      const summary: DetailedSummary = JSON.parse(document.summary as string)
+      const summary = parseSummary(document.summary)
+      if (!summary) {
+        removeToast(toastId)
+        showToast({
+          type: 'error',
+          title: 'AI要約データが不正です',
+          message: '要約を再生成してください',
+          duration: 5000
+        })
+        return
+      }
       const { SummaryExportService } = await import('@/lib/summaryExport')
       SummaryExportService.exportSummaryAsText(summary, document.original_name)
 

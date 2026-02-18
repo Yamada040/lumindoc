@@ -1,190 +1,101 @@
-# Lumindoc - AI-Powered Document Assistant
+# Lumindoc
 
-![Lumindoc Logo](https://via.placeholder.com/200x100/3B82F6/FFFFFF?text=Lumindoc)
+PDF/TXT をアップロードして、Gemini で要約する Next.js アプリです。  
+保存は Supabase ではなく、ブラウザの `localStorage + Blob URL` で完結します。
 
-**Lumindoc**は、AIの力であなたのドキュメント管理を革新する次世代のポートフォリオアプリケーションです。PDFやテキストファイルを瞬時に分析し、詳細な要約を生成します。
+## Features
 
-## ✨ 主な機能
+- PDF / TXT アップロード（最大 10MB）
+- Gemini による構造化要約（概要・重要点・セクション・難易度）
+- ドキュメント一覧（検索 / フィルタ / ソート / 削除）
+- 要約のテキストエクスポート
+- API クォータ超過時の UI 通知（429 をトースト表示）
 
-- 📄 **ドキュメントアップロード**: PDFとテキストファイルに対応
-- 🤖 **AI要約**: Google Gemini APIによる高精度な要約生成
-- 💾 **クラウドストレージ**: Supabaseによるセキュアなファイル保存
-- 📱 **レスポンシブデザイン**: あらゆるデバイスで最適な表示
-- 🎨 **モダンUI**: Framer Motionによる滑らかなアニメーション
-- 👁️ **PDFプレビュー**: ブラウザ内でのPDF表示
+## Tech Stack
 
-## 🛠️ 技術スタック
+- Next.js 15 (App Router)
+- React 19 + TypeScript
+- Tailwind CSS
+- Framer Motion
+- Google Gemini API (`@google/generative-ai`)
 
-### フロントエンド
-- **Next.js 15** - Reactフレームワーク
-- **TypeScript** - 型安全な開発
-- **Tailwind CSS** - ユーティリティファーストCSS
-- **Framer Motion** - アニメーションライブラリ
-- **Lucide React** - アイコンライブラリ
+## Project Structure
 
-### バックエンド
-- **Next.js API Routes** - サーバーレスAPI
-- **Supabase** - BaaS（データベース・ストレージ）
-- **Google Gemini API** - AI要約エンジン
-
-### UI/UX
-- **React PDF** - PDFレンダリング
-- **React Dropzone** - ファイルアップロード
-- **Radix UI** - アクセシブルなUIコンポーネント
-
-## 🚀 セットアップ
-
-### 1. リポジトリのクローン
-
-```bash
-git clone https://github.com/your-username/lumindoc.git
-cd lumindoc
+```txt
+app/
+  api/summarize/route.ts   # 要約 API（PDF/TXT テキスト抽出 + Gemini 呼び出し）
+  page.tsx                 # 画面とユースケース制御
+components/                # UI コンポーネント群
+lib/
+  gemini.ts                # Gemini 呼び出し、モデルフォールバック、quota 例外
+  supabase.ts              # ローカル保存サービス（命名は互換維持）
+  summaryExport.ts         # 要約のテキスト出力
+types/                     # 型定義
 ```
 
-### 2. 依存関係のインストール
+## Setup
+
+### 1. Install
 
 ```bash
 npm install
 ```
 
-### 3. 環境変数の設定
+### 2. Environment Variables
 
-`.env.example`を`.env.local`にコピーして、必要な値を設定してください。
+`.env.local` を作成して API キーを設定します。
 
 ```bash
 cp .env.example .env.local
 ```
 
-#### 必要な環境変数:
+必須:
 
-- `NEXT_PUBLIC_GEMINI_API_KEY`: [Google AI Studio](https://aistudio.google.com/app/apikey)で取得
-- `NEXT_PUBLIC_SUPABASE_URL`: SupabaseプロジェクトのURL
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Supabaseの匿名キー
+- `GEMINI_API_KEY` または `NEXT_PUBLIC_GEMINI_API_KEY`
 
-### 4. Supabaseの設定
+推奨は `GEMINI_API_KEY` です（サーバー側で利用）。
 
-1. [Supabase](https://supabase.com)でアカウント作成・プロジェクト作成
-2. `database/schema.sql`の内容をSQL Editorで実行
-3. Storageで`documents`バケットを作成
-4. 環境変数を更新
-
-### 5. 開発サーバーの起動
+### 3. Run
 
 ```bash
 npm run dev
 ```
 
-http://localhost:3000 でアプリケーションが起動します。
+## API
 
-## 📁 プロジェクト構造
+### `POST /api/summarize`
 
-```
-lumindoc/
-├── app/                     # Next.js App Router
-│   ├── api/                 # API Routes
-│   ├── globals.css          # グローバルスタイル
-│   └── page.tsx             # メインページ
-├── components/              # Reactコンポーネント
-│   ├── FileUpload.tsx       # ファイルアップロード
-│   ├── DocumentDashboard.tsx # ドキュメント管理
-│   ├── SummaryCard.tsx      # 要約表示
-│   └── PDFViewer.tsx        # PDF閲覧
-├── lib/                     # ユーティリティ
-│   ├── gemini.ts           # Gemini API統合
-│   ├── supabase.ts         # Supabase クライアント
-│   └── utils.ts            # ヘルパー関数
-├── types/                   # TypeScript型定義
-└── database/               # データベーススキーマ
-```
+`multipart/form-data` で `file` を送信します。
 
-## 🎯 使い方
+- 対応: `application/pdf`, `text/plain`
+- 上限: 10MB
 
-1. **ホーム画面**: アプリの概要と統計を表示
-2. **アップロード**: PDFやテキストファイルをドラッグ&ドロップ
-3. **AI処理**: Gemini APIが自動で詳細要約を生成
-4. **ダッシュボード**: アップロードしたファイルを一覧管理
-5. **要約表示**: セクション別の詳細な要約を確認
-6. **PDFプレビュー**: ブラウザ内でPDFを表示・操作
+レスポンス:
 
-## 🔧 主要なコンポーネント
+- `200`: `{ success: true, summary, originalContent }`
+- `400`: 入力不正 / 抽出失敗
+- `429`: Gemini クォータ超過（`Retry-After` を返す場合あり）
+- `500`: サーバーエラー
 
-### FileUpload
-- ドラッグ&ドロップ対応のファイルアップロード
-- プログレス表示とファイル制限
-- リアルタイムフィードバック
+## Storage Behavior
 
-### SummaryCard
-- AI生成要約の詳細表示
-- 折りたたみ可能なセクション
-- 重要度別の視覚的な整理
+- 一覧メタ情報は `localStorage` に保存
+- 元ファイルは `Blob URL` で一時保持
+- 要約が `completed` または `error` になると Blob URL を解放
+- そのため、要約完了後は元ファイルの再ダウンロードは不可
 
-### DocumentDashboard
-- フィルタリング・ソート機能
-- グリッド/リスト表示の切り替え
-- 検索とアクション（削除・ダウンロード）
+## Known Limitations
 
-### PDFViewer
-- ズーム・ページ移動機能
-- モーダル表示対応
-- フルスクリーンプレビュー
+- PDF 抽出はテキストベース PDF 前提（画像PDF/OCR非対応）
+- Gemini の利用上限に依存（無料枠では 429 が発生しうる）
+- 現在 `package.json` に `lint` / `type-check` script は未定義
 
-## 🔐 セキュリティ
+## Notes for Portfolio Review
 
-- Row Level Security (RLS) でデータアクセス制御
-- ファイルサイズ制限（10MB）
-- 対応ファイル形式の制限
-- APIキーの適切な管理
+- 失敗系（quota / 不正ファイル / 空ファイル）を UI/HTTP 両面でハンドリング
+- モデル名差異に備えた Gemini フォールバックを実装
+- 外部 DB 依存を外し、ローカル完結構成でデモしやすく最適化
 
-## 📱 レスポンシブ対応
+## License
 
-- スマートフォン（320px〜）
-- タブレット（768px〜）
-- デスクトップ（1024px〜）
-- 大画面（1440px〜）
-
-## 🚀 デプロイ
-
-### Vercel（推奨）
-
-```bash
-npm run build
-npx vercel --prod
-```
-
-### その他のプラットフォーム
-
-- Netlify
-- AWS Amplify
-- Google Cloud Platform
-
-## 📈 パフォーマンス最適化
-
-- Next.js 15の最新機能を活用
-- 画像の自動最適化
-- コード分割とLazy Loading
-- アニメーションのGPU加速
-
-## 🤝 コントリビューション
-
-プルリクエストやイシューを歓迎します！
-
-1. フォークを作成
-2. フィーチャーブランチを作成 (`git checkout -b feature/amazing-feature`)
-3. 変更をコミット (`git commit -m 'Add amazing feature'`)
-4. ブランチにプッシュ (`git push origin feature/amazing-feature`)
-5. プルリクエストを開く
-
-## 📄 ライセンス
-
-このプロジェクトはMITライセンスの下で公開されています。
-
-## 🙏 謝辞
-
-- [Google Gemini](https://ai.google.dev/) - AI要約エンジン
-- [Supabase](https://supabase.com/) - バックエンドサービス
-- [Vercel](https://vercel.com/) - ホスティングプラットフォーム
-- [Next.js](https://nextjs.org/) - Reactフレームワーク
-
----
-
-**Lumindoc** - AIの力で、あなたのドキュメント管理を革新します 🚀
+MIT

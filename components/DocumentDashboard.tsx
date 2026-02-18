@@ -4,19 +4,12 @@ import React, { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Search,
-  Filter,
   Grid3X3,
   List,
   FileText,
   Calendar,
-  Clock,
-  Tag,
-  MoreVertical,
-  Eye,
   Download,
   Trash2,
-  Star,
-  Archive,
   Brain,
   Loader2
 } from 'lucide-react'
@@ -52,7 +45,6 @@ export function DocumentDashboard({
   const [sortBy, setSortBy] = useState<SortOption>('date')
   const [filterBy, setFilterBy] = useState<FilterOption>('all')
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedDocs, setSelectedDocs] = useState<Set<string>>(new Set())
   const [downloadingDocs, setDownloadingDocs] = useState<Set<string>>(new Set())
 
   // フィルタリングとソート
@@ -89,16 +81,6 @@ export function DocumentDashboard({
     return filtered
   }, [documents, searchQuery, filterBy, sortBy])
 
-  const toggleDocSelection = (docId: string) => {
-    const newSelected = new Set(selectedDocs)
-    if (newSelected.has(docId)) {
-      newSelected.delete(docId)
-    } else {
-      newSelected.add(docId)
-    }
-    setSelectedDocs(newSelected)
-  }
-
   const handleDownload = async (doc: Document) => {
     setDownloadingDocs(prev => new Set(prev).add(doc.id))
     try {
@@ -109,24 +91,6 @@ export function DocumentDashboard({
         newSet.delete(doc.id)
         return newSet
       })
-    }
-  }
-
-  const getSummaryStatusColor = (status: string) => {
-    switch (status) {
-      case 'completed': return 'text-green-600 bg-green-100'
-      case 'processing': return 'text-yellow-600 bg-yellow-100'
-      case 'error': return 'text-red-600 bg-red-100'
-      default: return 'text-gray-600 bg-gray-100'
-    }
-  }
-
-  const getSummaryStatusText = (status: string) => {
-    switch (status) {
-      case 'completed': return '要約完了'
-      case 'processing': return '要約中'
-      case 'error': return 'エラー'
-      default: return '待機中'
     }
   }
 
@@ -238,8 +202,6 @@ export function DocumentDashboard({
                 onDownload={() => handleDownload(doc)}
                 onSummarize={onDocumentSummarize ? () => onDocumentSummarize(doc) : undefined}
                 onSummaryDownload={onSummaryDownload ? () => onSummaryDownload(doc) : undefined}
-                isSelected={selectedDocs.has(doc.id)}
-                onToggleSelect={() => toggleDocSelection(doc.id)}
                 isSummarizing={summarizingDocs.has(doc.id)}
                 isDownloading={downloadingDocs.has(doc.id)}
               />
@@ -260,8 +222,6 @@ export function DocumentDashboard({
                   onDownload={() => handleDownload(doc)}
                   onSummarize={onDocumentSummarize ? () => onDocumentSummarize(doc) : undefined}
                   onSummaryDownload={onSummaryDownload ? () => onSummaryDownload(doc) : undefined}
-                  isSelected={selectedDocs.has(doc.id)}
-                  onToggleSelect={() => toggleDocSelection(doc.id)}
                   isSummarizing={summarizingDocs.has(doc.id)}
                   isDownloading={downloadingDocs.has(doc.id)}
                 />
@@ -283,8 +243,6 @@ function DocumentCard({
   onDownload,
   onSummarize,
   onSummaryDownload,
-  isSelected,
-  onToggleSelect,
   isSummarizing = false,
   isDownloading = false
 }: {
@@ -295,8 +253,6 @@ function DocumentCard({
   onDownload: () => void
   onSummarize?: () => void
   onSummaryDownload?: () => void
-  isSelected: boolean
-  onToggleSelect: () => void
   isSummarizing?: boolean
   isDownloading?: boolean
 }) {
@@ -308,10 +264,7 @@ function DocumentCard({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
       transition={{ delay: index * 0.05, duration: 0.3 }}
-      className={cn(
-        "bg-white rounded-xl shadow-sm border-2 border-gray-200 hover:shadow-lg hover:border-blue-300 transition-all cursor-pointer group w-full overflow-hidden",
-        isSelected && "border-blue-500 bg-blue-50"
-      )}
+      className="bg-white rounded-xl shadow-sm border-2 border-gray-200 hover:shadow-lg hover:border-blue-300 transition-all cursor-pointer group w-full overflow-hidden"
       onClick={onSelect}
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
@@ -432,8 +385,6 @@ function DocumentListItem({
   onDownload,
   onSummarize,
   onSummaryDownload,
-  isSelected,
-  onToggleSelect,
   isSummarizing = false,
   isDownloading = false
 }: {
@@ -444,8 +395,6 @@ function DocumentListItem({
   onDownload: () => void
   onSummarize?: () => void
   onSummaryDownload?: () => void
-  isSelected: boolean
-  onToggleSelect: () => void
   isSummarizing?: boolean
   isDownloading?: boolean
 }) {
@@ -455,10 +404,7 @@ function DocumentListItem({
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: 20 }}
       transition={{ delay: index * 0.02, duration: 0.2 }}
-      className={cn(
-        "flex items-center p-4 hover:bg-gray-50 transition-colors cursor-pointer",
-        isSelected && "bg-blue-50"
-      )}
+      className="flex items-center p-4 hover:bg-gray-50 transition-colors cursor-pointer"
       onClick={onSelect}
     >
       {/* ファイルアイコン */}
