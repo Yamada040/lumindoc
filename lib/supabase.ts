@@ -92,7 +92,7 @@ export class SupabaseService {
     return updated
   }
 
-  async updateDocumentSummary(id: string, summary: any, status?: string): Promise<Document> {
+  async updateDocumentSummary(id: string, summary: unknown, status?: string): Promise<Document> {
     const updates: Partial<Document> = { updated_at: new Date() }
 
     if (summary !== null) {

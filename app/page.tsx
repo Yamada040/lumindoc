@@ -67,7 +67,6 @@ export default function Home() {
     let toastId: string | undefined
 
     try {
-      console.log('Starting summary generation for document:', document.original_name)
       setSummarizingDocs(prev => new Set(prev).add(document.id))
       
       // 処理中の通知を表示
@@ -94,7 +93,6 @@ export default function Home() {
       const formData = new FormData()
       formData.append('file', file)
       
-      console.log('Sending request to /api/summarize')
       const summaryResponse = await fetch('/api/summarize', {
         method: 'POST',
         body: formData
@@ -120,16 +118,12 @@ export default function Home() {
         throw new Error(errorMessage)
       }
 
-      console.log('Summary API result:', result)
-      
       if (result.error) {
         throw new Error(`Summary generation error: ${result.error}`)
       }
       
       if (result.summary) {
-        console.log('Updating document summary in database')
         await supabaseService.updateDocumentSummary(document.id, result.summary, 'completed')
-        console.log('Document summary updated successfully')
         
         // 成功通知を表示
         if (toastId) removeToast(toastId)
@@ -139,16 +133,6 @@ export default function Home() {
           message: `${document.original_name} の要約を生成しました`,
           duration: 5000
         })
-        
-        // 成功音を再生（オプション）
-        try {
-          const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhCBxyw/PQgiMFJ3/M8ti5' +
-            'NwUZaLXs56hUFApGn+DyvmwhCBxyw/PQgiMFJ3/M8ti5ODcFGWi15+epVBQKRp/g8r9sIQgccsPz0IIjBSh/zPLYuDcGGWi15+epVBQKRp/g8r9sIQgccsPz0IIjBSh/zPLYuDcGGWi15+epVRQKRp/g8r9sIQgccsPz0IIjBSh/zPLYuDcHGWi15+epVRQKRp/g8r9sIQgccsPz0IIjBSh/zPLYuDg4GWi15+epVRQKRp/g8r9sIQgccsPz0IIjBSh/zPLYuDg4GWi15+epVRQKRp/g8r9sIQgccsPz0IIjBSh/zPLYuDg4GWi15+epVRQKRp/g8r9sIQgccsPz0IIjBSh/zPLYuDg4GWi15+epVRQKRp/g8r9sIQgccsPz0IIjBSh/zPLYuDg4GWi15+epVRQKRp/g8r9sIQgccsPz0IIjBSh/zPLYuDc4GWi15+epVRQKRp/f8r9sIQgccsPz0IIjBSh/zPLYuDc4GWi15+epVRQKRp/f8r9sIQgccsPz0IIkBSh+zPLYuDc3GWi15+eqVRQKRp/f8r9sIQgccsPz0IIkBSh+zPLYuDc3GWi15+eqVRQKRp/f8r9sIQgccsP=')
-          audio.volume = 0.3
-          audio.play().catch(() => {}) // 音が再生できなくても続行
-        } catch (e) {
-          // 音声再生エラーは無視
-        }
         
         // 2秒後にダッシュボードに戻る
         setTimeout(() => {
@@ -198,19 +182,15 @@ export default function Home() {
   // AI要約を実行
   const generateSummary = async (file: File, documentId: string): Promise<DetailedSummary | null> => {
     try {
-      console.log('Starting summary generation for file:', file.name, 'size:', file.size, 'type:', file.type)
       setSummaryProgress(prev => ({ ...prev, [file.name]: true }))
       
       const formData = new FormData()
       formData.append('file', file)
       
-      console.log('Sending request to /api/summarize')
       const response = await fetch('/api/summarize', {
         method: 'POST',
         body: formData
       })
-      
-      console.log('Response status:', response.status, 'ok:', response.ok)
 
       const result = await response.json().catch(() => ({}))
       if (!response.ok) {
@@ -231,30 +211,18 @@ export default function Home() {
         throw new Error(errorMessage)
       }
 
-      console.log('Summary API result:', result)
-      
       if (result.error) {
         throw new Error(`Summary generation error: ${result.error}`)
       }
       
       if (result.summary) {
-        console.log('Updating document summary in database')
-        // 要約をデータベースに保存
         await supabaseService.updateDocumentSummary(documentId, result.summary)
-        console.log('Document summary updated successfully')
-      } else {
-        console.warn('No summary in result:', result)
       }
       
       setSummaryProgress(prev => ({ ...prev, [file.name]: false }))
       return result.summary as DetailedSummary
     } catch (error) {
       console.error('Summary generation failed:', error)
-      console.error('Error details:', {
-        name: error instanceof Error ? error.name : 'Unknown',
-        message: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined
-      })
       setSummaryProgress(prev => ({ ...prev, [file.name]: false }))
       throw error
     }
@@ -694,7 +662,7 @@ export default function Home() {
               <Mail className="w-6 h-6 text-gray-400 hover:text-white transition-colors cursor-pointer" />
             </div>
             <div className="mt-8 pt-8 border-t border-gray-800 text-sm text-gray-400">
-              © 2024 Lumindoc. All rights reserved. | Powered by Gemini AI & Supabase
+              © 2024 Lumindoc. All rights reserved. | Powered by Gemini AI
             </div>
           </div>
         </div>
