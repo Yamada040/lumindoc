@@ -15,7 +15,7 @@ export class GeminiQuotaError extends Error {
 }
 
 function getGeminiApiKey(): string {
-  return process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY || ''
+  return process.env.NEXT_PUBLIC_GEMINI_API_KEY || ''
 }
 
 function extractRetryAfterSeconds(error: unknown): number | undefined {

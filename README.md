@@ -51,7 +51,7 @@ cp .env.example .env.local
 
 必須:
 
-- `GEMINI_API_KEY` または `NEXT_PUBLIC_GEMINI_API_KEY`
+- `NEXT_PUBLIC_GEMINI_API_KEY`
 
 ### 3. Run
 

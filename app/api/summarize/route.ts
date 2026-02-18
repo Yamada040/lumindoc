@@ -7,14 +7,14 @@ export const runtime = 'nodejs'
 const MAX_FILE_SIZE = 10 * 1024 * 1024
 
 function getApiKey() {
-  return process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY || ''
+  return process.env.NEXT_PUBLIC_GEMINI_API_KEY || ''
 }
 
 export async function POST(request: NextRequest) {
   try {
     if (!getApiKey()) {
       return NextResponse.json(
-        { error: 'Gemini API key is not configured. Set GEMINI_API_KEY.' },
+        { error: 'Gemini API key is not configured. Set NEXT_PUBLIC_GEMINI_API_KEY.' },
         { status: 500 }
       )
     }
