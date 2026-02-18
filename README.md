@@ -1,7 +1,7 @@
 # Lumindoc
 
 PDF/TXT をアップロードして、Gemini で要約する Next.js アプリです。  
-保存は Supabase ではなく、ブラウザの `localStorage + Blob URL` で完結します。
+保存はブラウザの `localStorage + Blob URL` で完結します。
 
 ## Features
 
@@ -28,7 +28,6 @@ app/
 components/                # UI コンポーネント群
 lib/
   gemini.ts                # Gemini 呼び出し、モデルフォールバック、quota 例外
-  supabase.ts              # ローカル保存サービス（命名は互換維持）
   summaryExport.ts         # 要約のテキスト出力
 types/                     # 型定義
 ```
@@ -51,9 +50,7 @@ cp .env.example .env.local
 
 必須:
 
-- `GEMINI_API_KEY` または `NEXT_PUBLIC_GEMINI_API_KEY`
-
-推奨は `GEMINI_API_KEY` です（サーバー側で利用）。
+- `NEXT_PUBLIC_GEMINI_API_KEY`
 
 ### 3. Run
 
@@ -94,7 +91,6 @@ npm run dev
 
 - 失敗系（quota / 不正ファイル / 空ファイル）を UI/HTTP 両面でハンドリング
 - モデル名差異に備えた Gemini フォールバックを実装
-- 外部 DB 依存を外し、ローカル完結構成でデモしやすく最適化
 
 ## License
 
