@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Upload, FileText, Sparkles, ArrowRight, Github, Twitter, Mail, X } from 'lucide-react'
+import { Sparkles, ArrowRight, Github, Twitter, Mail } from 'lucide-react'
 import { Document, DetailedSummary } from '@/types'
 import { FileUpload } from '@/components/FileUpload'
 import { FilePreview } from '@/components/FilePreview'
@@ -28,7 +28,9 @@ export default function Home() {
   const [isSummarizing, setIsSummarizing] = useState(false)
   const [summaryProgress, setSummaryProgress] = useState<{ [key: string]: boolean }>({})
   const [summarizingDocs, setSummarizingDocs] = useState<Set<string>>(new Set())
-  const { toasts, showToast, removeToast, updateToast } = useToast()
+  const { toasts, showToast, removeToast } = useToast()
+  const isQuotaError = (status: number, message: string) =>
+    status === 429 || message.includes('利用上限') || message.toLowerCase().includes('quota')
 
   // ドキュメントを読み込み
   useEffect(() => {
@@ -97,14 +99,27 @@ export default function Home() {
         method: 'POST',
         body: formData
       })
-      
+
+      const result = await summaryResponse.json().catch(() => ({}))
       if (!summaryResponse.ok) {
-        const errorText = await summaryResponse.text()
-        console.error('API Error Response:', errorText)
-        throw new Error(`Failed to generate summary: ${summaryResponse.status} - ${errorText}`)
+        const errorMessage = typeof result?.error === 'string' ? result.error : `要約APIエラー: ${summaryResponse.status}`
+
+        if (isQuotaError(summaryResponse.status, errorMessage)) {
+          await supabaseService.updateDocumentSummary(document.id, null, 'pending')
+          await loadDocuments()
+          if (toastId) removeToast(toastId)
+          showToast({
+            type: 'info',
+            title: 'API利用上限に達しました',
+            message: 'しばらく待ってから再試行してください。',
+            duration: 5000
+          })
+          return
+        }
+
+        throw new Error(errorMessage)
       }
-      
-      const result = await summaryResponse.json()
+
       console.log('Summary API result:', result)
       
       if (result.error) {
@@ -159,8 +174,11 @@ export default function Home() {
         duration: 7000
       })
       
-      // エラー状態に更新
-      if (document.id) {
+      const msg = error instanceof Error ? error.message : ''
+      const skipErrorStatusUpdate = msg.includes('利用上限') || msg.toLowerCase().includes('quota')
+
+      // エラー状態に更新（クォータ超過は除外）
+      if (document.id && !skipErrorStatusUpdate) {
         try {
           await supabaseService.updateDocumentSummary(document.id, null, 'error')
           await loadDocuments()
@@ -178,7 +196,7 @@ export default function Home() {
   }
 
   // AI要約を実行
-  const generateSummary = async (file: File, documentId: string) => {
+  const generateSummary = async (file: File, documentId: string): Promise<DetailedSummary | null> => {
     try {
       console.log('Starting summary generation for file:', file.name, 'size:', file.size, 'type:', file.type)
       setSummaryProgress(prev => ({ ...prev, [file.name]: true }))
@@ -193,14 +211,26 @@ export default function Home() {
       })
       
       console.log('Response status:', response.status, 'ok:', response.ok)
-      
+
+      const result = await response.json().catch(() => ({}))
       if (!response.ok) {
-        const errorText = await response.text()
-        console.error('API Error Response:', errorText)
-        throw new Error(`Failed to generate summary: ${response.status} - ${errorText}`)
+        const errorMessage = typeof result?.error === 'string' ? result.error : `要約APIエラー: ${response.status}`
+
+        if (isQuotaError(response.status, errorMessage)) {
+          await supabaseService.updateDocumentSummary(documentId, null, 'pending')
+          showToast({
+            type: 'info',
+            title: 'API利用上限に達しました',
+            message: 'しばらく待ってから再試行してください。',
+            duration: 5000
+          })
+          setSummaryProgress(prev => ({ ...prev, [file.name]: false }))
+          return null
+        }
+
+        throw new Error(errorMessage)
       }
-      
-      const result = await response.json()
+
       console.log('Summary API result:', result)
       
       if (result.error) {
@@ -217,7 +247,7 @@ export default function Home() {
       }
       
       setSummaryProgress(prev => ({ ...prev, [file.name]: false }))
-      return result.summary
+      return result.summary as DetailedSummary
     } catch (error) {
       console.error('Summary generation failed:', error)
       console.error('Error details:', {
@@ -269,16 +299,16 @@ export default function Home() {
         })
         
         try {
-          await generateSummary(file, savedDoc.id)
-          
-          // 成功通知
+          const summary = await generateSummary(file, savedDoc.id)
           removeToast(summaryToastId)
-          showToast({
-            type: 'success',
-            title: 'AI要約が完了しました！',
-            message: `${file.name} の要約を生成しました`,
-            duration: 5000
-          })
+          if (summary) {
+            showToast({
+              type: 'success',
+              title: 'AI要約が完了しました！',
+              message: `${file.name} の要約を生成しました`,
+              duration: 5000
+            })
+          }
         } catch (error) {
           console.error('Summary generation failed:', error)
           
@@ -732,7 +762,7 @@ function HeroSection({ onGetStarted, documentsCount }: { onGetStarted: () => voi
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.8 }}
-            className="flex flex-col sm:flex-row gap-6 justify-center items-center mb-16"
+            className="flex justify-center items-center mb-16"
           >
             <button
               onClick={onGetStarted}
@@ -742,9 +772,6 @@ function HeroSection({ onGetStarted, documentsCount }: { onGetStarted: () => voi
                 今すぐ始める
                 <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </span>
-            </button>
-            <button className="text-gray-600 px-8 py-4 rounded-xl text-lg font-semibold hover:bg-white hover:shadow-lg transition-all duration-300">
-              デモを見る
             </button>
           </motion.div>
 

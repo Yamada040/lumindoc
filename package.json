@@ -12,7 +12,6 @@
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-progress": "^1.1.7",
     "@radix-ui/react-tabs": "^1.1.13",
-    "@supabase/supabase-js": "^2.56.0",
     "clsx": "^2.1.1",
     "framer-motion": "^12.23.12",
     "lucide-react": "^0.541.0",

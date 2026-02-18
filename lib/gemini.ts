@@ -1,121 +1,171 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { DetailedSummary } from '@/types'
 
-const genAI = new GoogleGenerativeAI(process.env.NEXT_PUBLIC_GEMINI_API_KEY || '')
+const MODEL_CANDIDATES = ['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-1.5-flash']
+
+export class GeminiQuotaError extends Error {
+  readonly status = 429
+  readonly retryAfterSeconds?: number
+
+  constructor(message: string, retryAfterSeconds?: number) {
+    super(message)
+    this.name = 'GeminiQuotaError'
+    this.retryAfterSeconds = retryAfterSeconds
+  }
+}
+
+function getGeminiApiKey(): string {
+  return process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY || ''
+}
+
+function extractRetryAfterSeconds(error: unknown): number | undefined {
+  const text = error instanceof Error ? error.message : String(error)
+  const match = text.match(/retry in\s+(\d+(?:\.\d+)?)s/i)
+  if (!match) return undefined
+  const sec = Math.ceil(Number(match[1]))
+  return Number.isFinite(sec) ? sec : undefined
+}
+
+function normalizeSummary(input: unknown): DetailedSummary {
+  const obj = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>
+
+  const keyPoints = Array.isArray(obj.keyPoints)
+    ? obj.keyPoints.filter((v): v is string => typeof v === 'string').slice(0, 8)
+    : []
+
+  const topics = Array.isArray(obj.topics)
+    ? obj.topics.filter((v): v is string => typeof v === 'string').slice(0, 8)
+    : []
+
+  const sections = Array.isArray(obj.sections)
+    ? obj.sections
+        .map((section): DetailedSummary['sections'][number] | null => {
+          if (!section || typeof section !== 'object') return null
+          const s = section as Record<string, unknown>
+          return {
+            title: typeof s.title === 'string' ? s.title : 'セクション',
+            content: typeof s.content === 'string' ? s.content : '',
+            importance:
+              s.importance === 'high' || s.importance === 'medium' || s.importance === 'low'
+                ? s.importance
+                : 'medium',
+            page: typeof s.page === 'number' ? s.page : undefined,
+          }
+        })
+        .filter((v): v is DetailedSummary['sections'][number] => Boolean(v))
+    : []
+
+  const difficulty =
+    obj.difficulty === 'beginner' || obj.difficulty === 'intermediate' || obj.difficulty === 'advanced'
+      ? obj.difficulty
+      : 'intermediate'
+
+  return {
+    overview: typeof obj.overview === 'string' ? obj.overview : '要約を生成しました。',
+    keyPoints,
+    sections,
+    wordCount: typeof obj.wordCount === 'number' ? obj.wordCount : 0,
+    pageCount: typeof obj.pageCount === 'number' ? obj.pageCount : undefined,
+    topics,
+    difficulty,
+  }
+}
+
+function parseJson(text: string): unknown {
+  const fenced = text.match(/```json\s*([\s\S]*?)\s*```/i)
+  const raw = fenced?.[1] || text
+  const obj = raw.match(/\{[\s\S]*\}/)
+  if (!obj) throw new Error('Invalid JSON response from Gemini')
+  return JSON.parse(obj[0])
+}
 
 export class GeminiService {
-  private model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+  private getClient() {
+    const apiKey = getGeminiApiKey()
+    if (!apiKey) {
+      throw new Error('Gemini API key is not configured')
+    }
+    return new GoogleGenerativeAI(apiKey)
+  }
+
+  private async generateWithFallback(prompt: string): Promise<string> {
+    const client = this.getClient()
+    let lastError: unknown
+
+    for (const modelName of MODEL_CANDIDATES) {
+      try {
+        const model = client.getGenerativeModel({ model: modelName })
+        const result = await model.generateContent(prompt)
+        const response = await result.response
+        return response.text()
+      } catch (error) {
+        lastError = error
+        const status =
+          typeof error === 'object' && error && 'status' in error
+            ? Number((error as { status?: unknown }).status)
+            : undefined
+        const message = error instanceof Error ? error.message.toLowerCase() : ''
+
+        const isQuota = status === 429 || message.includes('quota exceeded') || message.includes('too many requests')
+        if (isQuota) {
+          throw new GeminiQuotaError(
+            'Gemini APIの利用上限に達しました。しばらく待ってから再試行してください。',
+            extractRetryAfterSeconds(error)
+          )
+        }
+
+        const shouldTryNext = status === 404 || message.includes('not found')
+        if (!shouldTryNext) {
+          throw error
+        }
+      }
+    }
+
+    throw lastError instanceof Error ? lastError : new Error('Gemini request failed')
+  }
 
   async generateDetailedSummary(content: string, fileName: string): Promise<DetailedSummary> {
     const prompt = `
-以下のドキュメント「${fileName}」の内容を詳細に分析し、以下の形式でJSONレスポンスを返してください：
+以下のドキュメント「${fileName}」を分析し、必ず JSON で返してください。
 
 {
-  "overview": "ドキュメント全体の簡潔な概要（200文字以内）",
-  "keyPoints": ["重要なポイント1", "重要なポイント2", "重要なポイント3"],
-  "sections": [
-    {
-      "title": "セクション名",
-      "content": "セクションの詳細な要約",
-      "importance": "high|medium|low",
-      "page": ページ番号（PDFの場合）
-    }
-  ],
-  "wordCount": 推定文字数,
-  "pageCount": ページ数（PDFの場合）,
-  "topics": ["トピック1", "トピック2", "トピック3"],
+  "overview": "概要（200文字以内）",
+  "keyPoints": ["重要ポイント1", "重要ポイント2", "重要ポイント3"],
+  "sections": [{"title": "見出し", "content": "説明", "importance": "high|medium|low", "page": 1}],
+  "wordCount": 1000,
+  "pageCount": 10,
+  "topics": ["トピック1", "トピック2"],
   "difficulty": "beginner|intermediate|advanced"
 }
 
-分析する内容：
-${content}
+制約:
+- 日本語
+- JSON 以外の文を出さない
 
-注意事項：
-- 日本語で回答してください
-- 重要な情報を見逃さないよう詳細に分析してください
-- セクションは論理的な構造に基づいて分割してください
-- 難易度は内容の複雑さと専門性を基準に判定してください
-- JSONフォーマットを厳密に守ってください
+対象本文:
+${content}
 `
 
     try {
-      const result = await this.model.generateContent(prompt)
-      const response = await result.response
-      const text = response.text()
-
-      // JSONレスポンスをパース
-      const jsonMatch = text.match(/```json\n([\s\S]*?)\n```/) || text.match(/({[\s\S]*})/)
-      if (!jsonMatch) {
-        throw new Error('Invalid JSON response from Gemini')
-      }
-
-      const summary: DetailedSummary = JSON.parse(jsonMatch[1] || jsonMatch[0])
-      return summary
+      const text = await this.generateWithFallback(prompt)
+      return normalizeSummary(parseJson(text))
     } catch (error) {
       console.error('Gemini API Error:', error)
+      if (error instanceof GeminiQuotaError) throw error
       throw new Error('要約の生成に失敗しました')
     }
   }
 
   async generateQuickSummary(content: string): Promise<string> {
-    const prompt = `
-以下の内容を3〜5行で簡潔に要約してください。重要なポイントのみを日本語で抽出してください：
-
-${content}
-`
+    const prompt = `以下の内容を3〜5行で簡潔に要約してください。\n\n${content}`
 
     try {
-      const result = await this.model.generateContent(prompt)
-      const response = await result.response
-      return response.text()
+      return await this.generateWithFallback(prompt)
     } catch (error) {
       console.error('Gemini API Error:', error)
+      if (error instanceof GeminiQuotaError) throw error
       throw new Error('クイック要約の生成に失敗しました')
     }
-  }
-
-  async extractTextFromPDF(file: File): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = async () => {
-        try {
-          const arrayBuffer = reader.result as ArrayBuffer
-
-          // クライアントサイドでは基本情報のみを返す（PDF解析はサーバーサイドで実行）
-          const basicInfo = `
-PDFファイル: ${file.name}
-ファイルサイズ: ${(file.size / 1024).toFixed(2)} KB
-作成日時: ${new Date(file.lastModified).toLocaleString('ja-JP')}
-ファイルタイプ: PDF
-
-※注意: このファイルはPDFドキュメントです。
-サーバーサイドでの処理により、実際のテキスト内容が抽出されます。
-          `.trim()
-
-          console.log('PDF file prepared for server-side processing, size:', file.size)
-          resolve(basicInfo)
-        } catch (error) {
-          console.error('PDF file processing error:', error)
-          reject(new Error('PDFファイルの処理に失敗しました'))
-        }
-      }
-      reader.onerror = (error) => {
-        console.error('FileReader error:', error)
-        reject(new Error('ファイルの読み込みエラーが発生しました'))
-      }
-      reader.readAsArrayBuffer(file)
-    })
-  }
-
-  async extractTextFromText(file: File): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = () => {
-        resolve(reader.result as string)
-      }
-      reader.onerror = reject
-      reader.readAsText(file, 'UTF-8')
-    })
   }
 }
 

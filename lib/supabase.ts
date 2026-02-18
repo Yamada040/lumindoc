@@ -1,239 +1,183 @@
-import { createClient } from '@supabase/supabase-js'
 import { Document } from '@/types'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+const STORAGE_KEY = 'lumindoc_documents'
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+const toDate = (value?: string | Date): Date => {
+  if (!value) return new Date()
+  return value instanceof Date ? value : new Date(value)
+}
+
+const readDocuments = (): Document[] => {
+  if (typeof window === 'undefined') return []
+
+  const raw = window.localStorage.getItem(STORAGE_KEY)
+  if (!raw) return []
+
+  try {
+    const parsed = JSON.parse(raw) as Array<Record<string, unknown>>
+    return parsed.map((doc) => ({
+      ...(doc as unknown as Document),
+      uploaded_at: toDate(doc.uploaded_at as string),
+      created_at: doc.created_at ? toDate(doc.created_at as string) : undefined,
+      updated_at: doc.updated_at ? toDate(doc.updated_at as string) : undefined,
+    }))
+  } catch {
+    return []
+  }
+}
+
+const writeDocuments = (documents: Document[]) => {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(documents))
+}
+
+const createId = () =>
+  typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 
 export class SupabaseService {
-  async uploadFile(file: File, userId: string = 'anonymous'): Promise<{ url: string; path: string }> {
-    // ファイル名をサニタイズ（日本語や特殊文字を処理）
-    const fileExt = file.name.split('.').pop() || 'pdf'
-    const timestamp = Date.now()
-    const randomString = Math.random().toString(36).substring(2, 15)
-    const sanitizedFileName = `${timestamp}-${randomString}.${fileExt}`
-    const filePath = `${userId}/${sanitizedFileName}`
-
-    const { data, error } = await supabase.storage
-      .from('documents')
-      .upload(filePath, file)
-
-    if (error) {
-      throw new Error(`ファイルのアップロードに失敗しました: ${error.message}`)
+  async uploadFile(file: File, userId: string = 'local'): Promise<{ url: string; path: string }> {
+    if (typeof window === 'undefined') {
+      throw new Error('ファイルアップロードはブラウザ環境でのみ利用できます')
     }
 
-    const { data: { publicUrl } } = supabase.storage
-      .from('documents')
-      .getPublicUrl(data.path)
-
-    return {
-      url: publicUrl,
-      path: data.path
-    }
+    const fileExt = file.name.split('.').pop() || 'dat'
+    const path = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${fileExt}`
+    const url = window.URL.createObjectURL(file)
+    return { url, path }
   }
 
   async saveDocument(document: Omit<Document, 'id'>): Promise<Document> {
-    const { data, error } = await supabase
-      .from('documents')
-      .insert([document])
-      .select()
-      .single()
-
-    if (error) {
-      throw new Error(`ドキュメントの保存に失敗しました: ${error.message}`)
+    const saved: Document = {
+      ...document,
+      id: createId(),
+      uploaded_at: document.uploaded_at || new Date(),
+      created_at: new Date(),
+      updated_at: new Date(),
     }
 
-    // 日付フィールドを適切にDateオブジェクトに変換
-    return {
-      ...data,
-      uploaded_at: data.uploaded_at ? new Date(data.uploaded_at) : new Date(),
-      created_at: data.created_at ? new Date(data.created_at) : undefined,
-      updated_at: data.updated_at ? new Date(data.updated_at) : undefined,
-    }
+    const documents = readDocuments()
+    documents.unshift(saved)
+    writeDocuments(documents)
+    return saved
   }
 
-  async getDocuments(userId: string = 'anonymous'): Promise<Document[]> {
-    const { data, error } = await supabase
-      .from('documents')
-      .select('*')
-      .order('uploaded_at', { ascending: false })
-
-    if (error) {
-      throw new Error(`ドキュメントの取得に失敗しました: ${error.message}`)
-    }
-
-    // 日付フィールドを適切にDateオブジェクトに変換
-    const documents = (data || []).map(doc => ({
-      ...doc,
-      uploaded_at: doc.uploaded_at ? new Date(doc.uploaded_at) : new Date(),
-      created_at: doc.created_at ? new Date(doc.created_at) : undefined,
-      updated_at: doc.updated_at ? new Date(doc.updated_at) : undefined,
-    }))
-
-    return documents
+  async getDocuments(): Promise<Document[]> {
+    return readDocuments().sort(
+      (a, b) => new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime()
+    )
   }
 
   async getDocument(id: string): Promise<Document | null> {
-    const { data, error } = await supabase
-      .from('documents')
-      .select('*')
-      .eq('id', id)
-      .single()
-
-    if (error) {
-      if (error.code === 'PGRST116') {
-        return null // ドキュメントが見つからない
-      }
-      throw new Error(`ドキュメントの取得に失敗しました: ${error.message}`)
-    }
-
-    // 日付フィールドを適切にDateオブジェクトに変換
-    if (data) {
-      return {
-        ...data,
-        uploaded_at: data.uploaded_at ? new Date(data.uploaded_at) : new Date(),
-        created_at: data.created_at ? new Date(data.created_at) : undefined,
-        updated_at: data.updated_at ? new Date(data.updated_at) : undefined,
-      }
-    }
-
-    return null
+    return readDocuments().find((doc) => doc.id === id) || null
   }
 
   async updateDocument(id: string, updates: Partial<Document>): Promise<Document> {
-    const { data, error } = await supabase
-      .from('documents')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single()
+    const documents = readDocuments()
+    const index = documents.findIndex((doc) => doc.id === id)
 
-    if (error) {
-      throw new Error(`ドキュメントの更新に失敗しました: ${error.message}`)
-    }
-
-    // 日付フィールドを適切にDateオブジェクトに変換
-    return {
-      ...data,
-      uploaded_at: data.uploaded_at ? new Date(data.uploaded_at) : new Date(),
-      created_at: data.created_at ? new Date(data.created_at) : undefined,
-      updated_at: data.updated_at ? new Date(data.updated_at) : undefined,
-    }
-  }
-
-  async updateDocumentSummary(id: string, summary: any, status?: string): Promise<Document> {
-    const updates: Partial<Document> = {
-      updated_at: new Date()
-    }
-    
-    if (summary !== null) {
-      updates.summary = typeof summary === 'string' ? summary : JSON.stringify(summary)
-    }
-    
-    if (status) {
-      updates.summary_status = status as any
-    } else if (summary !== null) {
-      updates.summary_status = 'completed' as const
-    }
-
-    return this.updateDocument(id, updates)
-  }
-
-  async deleteDocument(id: string): Promise<void> {
-    // まずドキュメント情報を取得
-    const document = await this.getDocument(id)
-    if (!document) {
+    if (index < 0) {
       throw new Error('ドキュメントが見つかりません')
     }
 
-    // ストレージからファイルを削除
-    if (document.url) {
-      const { error: storageError } = await supabase.storage
-        .from('documents')
-        .remove([document.url])
+    const updated: Document = {
+      ...documents[index],
+      ...updates,
+      updated_at: new Date(),
+    }
 
-      if (storageError) {
-        console.warn('ストレージからの削除に失敗:', storageError.message)
+    documents[index] = updated
+    writeDocuments(documents)
+    return updated
+  }
+
+  async updateDocumentSummary(id: string, summary: any, status?: string): Promise<Document> {
+    const updates: Partial<Document> = { updated_at: new Date() }
+
+    if (summary !== null) {
+      updates.summary = typeof summary === 'string' ? summary : JSON.stringify(summary)
+    }
+
+    if (status) {
+      updates.summary_status = status as Document['summary_status']
+    } else if (summary !== null) {
+      updates.summary_status = 'completed'
+    }
+
+    const updated = await this.updateDocument(id, updates)
+
+    if ((updated.summary_status === 'completed' || updated.summary_status === 'error') && updated.public_url) {
+      try {
+        if (updated.public_url.startsWith('blob:')) {
+          window.URL.revokeObjectURL(updated.public_url)
+        }
+      } catch {
+        // no-op
+      }
+
+      return this.updateDocument(id, {
+        url: undefined,
+        public_url: undefined,
+        file_path: undefined,
+      })
+    }
+
+    return updated
+  }
+
+  async deleteDocument(id: string): Promise<void> {
+    const documents = readDocuments()
+    const target = documents.find((doc) => doc.id === id)
+
+    if (target?.public_url?.startsWith('blob:') && typeof window !== 'undefined') {
+      try {
+        window.URL.revokeObjectURL(target.public_url)
+      } catch {
+        // no-op
       }
     }
 
-    // データベースからレコードを削除
-    const { error } = await supabase
-      .from('documents')
-      .delete()
-      .eq('id', id)
-
-    if (error) {
-      throw new Error(`ドキュメントの削除に失敗しました: ${error.message}`)
-    }
+    writeDocuments(documents.filter((doc) => doc.id !== id))
   }
 
   async downloadFile(path: string): Promise<Blob> {
-    const { data, error } = await supabase.storage
-      .from('documents')
-      .download(path)
-
-    if (error) {
-      throw new Error(`ファイルのダウンロードに失敗しました: ${error.message}`)
-    }
-
-    return data
+    throw new Error('ローカルモードでは storage path からのダウンロードはサポートされません')
   }
 
   getPublicUrl(path: string): string {
-    const { data } = supabase.storage
-      .from('documents')
-      .getPublicUrl(path)
-
-    return data.publicUrl
+    return path
   }
 
   async downloadDocument(document: Document): Promise<void> {
-    // ブラウザ環境でのみ実行
     if (typeof window === 'undefined') {
       throw new Error('ダウンロードはブラウザでのみ実行できます')
     }
 
-    try {
-      let blob: Blob
-      let fileName = document.original_name
-
-      if (document.file_path) {
-        // Supabase Storageからファイルをダウンロード
-        blob = await this.downloadFile(document.file_path)
-      } else if (document.public_url) {
-        // public_urlからファイルを取得
-        const response = await fetch(document.public_url)
-        if (!response.ok) {
-          throw new Error(`ファイルの取得に失敗しました: ${response.status}`)
-        }
-        blob = await response.blob()
-      } else {
-        throw new Error('ダウンロード可能なファイルが見つかりません')
-      }
-
-      // Blobから一時的なダウンロードリンクを作成
-      const url = window.URL.createObjectURL(blob)
-      
-      // ダウンロードリンクを作成してクリック
-      const link = window.document.createElement('a')
-      link.href = url
-      link.download = fileName
-      link.style.display = 'none'
-      
-      window.document.body.appendChild(link)
-      link.click()
-      
-      // クリーンアップ
-      setTimeout(() => {
-        window.document.body.removeChild(link)
-        window.URL.revokeObjectURL(url)
-      }, 100)
-    } catch (error) {
-      console.error('Download failed:', error)
-      throw error
+    if (!document.public_url) {
+      throw new Error('元ファイルは一時保存のみのため、要約完了後はダウンロードできません')
     }
+
+    const response = await fetch(document.public_url)
+    if (!response.ok) {
+      throw new Error(`ファイルの取得に失敗しました: ${response.status}`)
+    }
+
+    const blob = await response.blob()
+    const url = window.URL.createObjectURL(blob)
+
+    const link = window.document.createElement('a')
+    link.href = url
+    link.download = document.original_name
+    link.style.display = 'none'
+
+    window.document.body.appendChild(link)
+    link.click()
+
+    setTimeout(() => {
+      window.document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+    }, 100)
   }
 }
 
