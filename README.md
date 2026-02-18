@@ -28,6 +28,7 @@ app/
 components/                # UI コンポーネント群
 lib/
   gemini.ts                # Gemini 呼び出し、モデルフォールバック、quota 例外
+  storage.ts               # ローカル保存サービス
   summaryExport.ts         # 要約のテキスト出力
 types/                     # 型定義
 ```
@@ -50,7 +51,7 @@ cp .env.example .env.local
 
 必須:
 
-- `NEXT_PUBLIC_GEMINI_API_KEY`
+- `GEMINI_API_KEY` または `NEXT_PUBLIC_GEMINI_API_KEY`
 
 ### 3. Run
 

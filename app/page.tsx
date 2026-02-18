@@ -12,7 +12,7 @@ import { SummaryCard } from '@/components/SummaryCard'
 import { PDFViewer } from '@/components/PDFViewer'
 import { TextViewer } from '@/components/TextViewer'
 import { ToastContainer, useToast } from '@/components/Toast'
-import { supabaseService } from '@/lib/supabase'
+import { storageService } from '@/lib/storage'
 
 type AppView = 'home' | 'upload' | 'dashboard' | 'summary' | 'preview'
 
@@ -88,7 +88,7 @@ export default function Home() {
   const loadDocuments = async () => {
     try {
       setIsLoading(true)
-      const docs = await supabaseService.getDocuments()
+      const docs = await storageService.getDocuments()
       setDocuments(docs)
     } catch (error) {
       console.error('Failed to load documents:', error)
@@ -126,7 +126,7 @@ export default function Home() {
       })
       
       // ドキュメントのステータスを「処理中」に更新
-      await supabaseService.updateDocumentSummary(document.id, null, 'processing')
+      await storageService.updateDocumentSummary(document.id, null, 'processing')
       await loadDocuments() // UIを更新
 
       // ファイルをフェッチしてFormDataに追加
@@ -139,7 +139,7 @@ export default function Home() {
       const file = new File([blob], document.original_name, { type: document.type === 'pdf' ? 'application/pdf' : 'text/plain' })
       
       const summary = await requestSummary(file)
-      await supabaseService.updateDocumentSummary(document.id, summary, 'completed')
+      await storageService.updateDocumentSummary(document.id, summary, 'completed')
       
       // 成功通知を表示
       if (toastId) removeToast(toastId)
@@ -159,7 +159,7 @@ export default function Home() {
       
     } catch (error) {
       if (error instanceof SummarizeApiError && isQuotaError(error.status, error.message)) {
-        await supabaseService.updateDocumentSummary(document.id, null, 'pending')
+        await storageService.updateDocumentSummary(document.id, null, 'pending')
         await loadDocuments()
         if (toastId) removeToast(toastId)
         showToast({
@@ -188,7 +188,7 @@ export default function Home() {
       // エラー状態に更新（クォータ超過は除外）
       if (document.id && !skipErrorStatusUpdate) {
         try {
-          await supabaseService.updateDocumentSummary(document.id, null, 'error')
+          await storageService.updateDocumentSummary(document.id, null, 'error')
           await loadDocuments()
         } catch (updateError) {
           console.error('Failed to update error status:', updateError)
@@ -209,13 +209,13 @@ export default function Home() {
       setSummaryProgress(prev => ({ ...prev, [file.name]: true }))
 
       const summary = await requestSummary(file)
-      await supabaseService.updateDocumentSummary(documentId, summary)
+      await storageService.updateDocumentSummary(documentId, summary)
       
       setSummaryProgress(prev => ({ ...prev, [file.name]: false }))
       return summary
     } catch (error) {
       if (error instanceof SummarizeApiError && isQuotaError(error.status, error.message)) {
-        await supabaseService.updateDocumentSummary(documentId, null, 'pending')
+        await storageService.updateDocumentSummary(documentId, null, 'pending')
         showToast({
           type: 'info',
           title: 'API利用上限に達しました',
@@ -239,7 +239,7 @@ export default function Home() {
       setUploadProgress(0)
 
       // 1. ファイルをローカル保存用URLとして保持
-      const { url, path } = await supabaseService.uploadFile(file)
+      const { url, path } = await storageService.uploadFile(file)
       setUploadProgress(30)
 
       // 2. ドキュメント情報をデータベースに保存
@@ -255,7 +255,7 @@ export default function Home() {
         file_path: path
       }
 
-      const savedDoc = await supabaseService.saveDocument(document)
+      const savedDoc = await storageService.saveDocument(document)
       setUploadProgress(100)
       
       // AI要約を実行する場合
@@ -354,7 +354,7 @@ export default function Home() {
 
   const handleDocumentDelete = async (id: string) => {
     try {
-      await supabaseService.deleteDocument(id)
+      await storageService.deleteDocument(id)
       await loadDocuments()
       
       showToast({
@@ -382,7 +382,7 @@ export default function Home() {
         duration: 0
       })
       
-      await supabaseService.downloadDocument(document)
+      await storageService.downloadDocument(document)
       
       removeToast(toastId)
       showToast({

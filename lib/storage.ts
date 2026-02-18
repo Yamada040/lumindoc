@@ -36,7 +36,7 @@ const createId = () =>
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 
-export class SupabaseService {
+export class StorageService {
   async uploadFile(file: File, userId: string = 'local'): Promise<{ url: string; path: string }> {
     if (typeof window === 'undefined') {
       throw new Error('ファイルアップロードはブラウザ環境でのみ利用できます')
@@ -181,4 +181,4 @@ export class SupabaseService {
   }
 }
 
-export const supabaseService = new SupabaseService()
+export const storageService = new StorageService()
